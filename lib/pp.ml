@@ -286,3 +286,120 @@ module CC = struct
         pp_value v
         pp_tag t
 end
+
+module KNorm = struct 
+  open Syntax.KNorm
+
+  let pp_tyarg ppf = function
+  | Ty u -> pp_ty ppf u
+  | TyNu -> pp_print_string ppf "ν"
+
+  let pp_print_k_id ppf (x, tas) =
+    if List.length tas = 0 then
+      fprintf ppf "%s" x
+    else
+      let pp_sep ppf () = fprintf ppf "," in
+      let pp_list ppf types = pp_print_list pp_tyarg ppf types ~pp_sep:pp_sep in
+      fprintf ppf "%s[%a]"
+        x
+        pp_list tas
+
+  let pp_let_tyabses ppf tvs =
+    if List.length tvs = 0 then
+      fprintf ppf ""
+    else
+      let pp_sep ppf () = fprintf ppf "," in
+      let pp_list ppf types = pp_print_list pp_ty ppf types ~pp_sep:pp_sep in
+      fprintf ppf "fun %a -> "
+        pp_list @@ List.map (fun x -> TyVar x) tvs
+
+  let gt_exp e e1 = match e, e1 with
+    | (Var _ | IConst _ | BConst _ | UConst _), _ -> raise @@ Syntax_error(* "gt_exp: value-exp was given as e"*)
+    | (BinOp _ | AppExp _), _ -> raise @@ Syntax_error(* "gt_exp : expression not contain exp was given as e"*)
+    | (IfEqExp _ | IfLteExp _), (FunExp _ | LetExp _) -> true
+    | _ -> false
+  
+  let gte_exp e e1 = match e, e1 with
+    | BinOp (_, op, _ , _), BinOp (_, op1, _, _) when op = op1 -> true
+    | FunExp _, FunExp _ | AppExp _, AppExp _ | LetExp _ , LetExp _ -> true
+    | (IfEqExp _ | IfLteExp _), (IfEqExp _ | IfLteExp _) -> true
+    | _ -> gt_exp e e1
+
+  let rec pp_exp ppf = function
+    | Var (_, k_x) -> pp_print_k_id ppf k_x
+    | IConst (_, i) -> pp_print_int ppf i
+    | BConst (_, b) -> pp_print_bool ppf b
+    | UConst _ -> pp_print_string ppf "()"
+    | BinOp (_, op, k_x1, k_x2) ->
+      fprintf ppf "%a %a %a"
+        pp_print_k_id k_x1
+        pp_binop op
+        pp_print_k_id k_x2
+    | IfEqExp (_, k_x, k_y, e1, e2) ->
+      fprintf ppf "if %a=%a then %a else %a"
+        pp_print_k_id k_x
+        pp_print_k_id k_y
+        pp_exp e1
+        pp_exp e2
+    | IfLteExp (_, k_x, k_y, e1, e2) ->
+      fprintf ppf "if %a<=%a then %a else %a"
+        pp_print_k_id k_x
+        pp_print_k_id k_y
+        pp_exp e1
+        pp_exp e2
+    | FunExp (_, x, u, e) ->
+      fprintf ppf "fun (%s:%a) -> %a"
+        x
+        pp_ty u
+        pp_exp e
+    | FixExp (_, x, y, u1, u2, e) ->
+      fprintf ppf "fix %s (%s: %a): %a = %a"
+        x
+        y
+        pp_ty u1
+        pp_ty u2
+        pp_exp e
+    | AppExp (_, k_x1, k_x2) -> 
+      fprintf ppf "%a %a"
+        pp_print_k_id k_x1
+        pp_print_k_id k_x2
+    | CastExp (_, f1, u1, u2, _) as f ->
+      begin match f1 with
+        | CastExp (_, _, _, u1', _) when u1' = u1 -> 
+          fprintf ppf "%a => %a"
+            (with_paren (gt_exp f f1) pp_exp) f1
+            pp_ty u2
+        | CastExp _ -> raise @@ Syntax_error(* "Cast not match"*)
+        | _ -> 
+          fprintf ppf "%a: %a => %a"
+            (with_paren (gt_exp f f1) pp_exp) f1
+            pp_ty u1
+            pp_ty u2
+      end
+    | LetExp (_, x, tvs, e1, e2) as e ->
+        fprintf ppf "let %s = %a%a in %a"
+          x
+          pp_let_tyabses tvs
+          (with_paren (gt_exp e e1) pp_exp) e1
+          (with_paren (gte_exp e e2) pp_exp) e2
+
+  let pp_program ppf = function
+    | Exp e -> pp_exp ppf e
+    | LetDecl (x, tvs, e) ->
+      fprintf ppf "let %s = %a%a"
+        x
+        pp_let_tyabses tvs
+        pp_exp e
+
+  let pp_tag ppf t = pp_ty ppf @@ tag_to_ty t
+
+  let rec pp_value ppf = function
+    | BoolV b -> pp_print_bool ppf b
+    | IntV i -> pp_print_int ppf i
+    | UnitV -> pp_print_string ppf "()"
+    | FunV _ -> pp_print_string ppf "<fun>"
+    | Tagged (t, v) ->
+      fprintf ppf "%a: %a => ?"
+        pp_value v
+        pp_tag t
+end

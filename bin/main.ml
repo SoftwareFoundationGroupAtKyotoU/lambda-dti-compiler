@@ -3,7 +3,7 @@ open Lambda_dti
 
 let debug = ref false
 
-let rec read_eval_print lexbuf env tyenv =
+let rec read_eval_print lexbuf env tyenv kenv =
   (* Used in all modes *)
   let print f = fprintf std_formatter f in
   (* Used in debug mode *)
@@ -36,14 +36,29 @@ let rec read_eval_print lexbuf env tyenv =
       let u'' = Typing.CC.type_of_program tyenv f in
       assert (Typing.is_equal u u'');
 
+      (* k-Normalization *)
+      print_debug "***** kNormal *****\n";
+      let kf, ku = KNormal.CC.k_normalize_program tyenv f in
+      print_debug "kf: %a\n" Pp.KNorm.pp_program kf;
+      assert (Typing.is_equal u ku);
+
       (* Evaluation *)
       print_debug "***** Eval *****\n";
-      let env, x, v = Eval.eval_program env f ~debug:!debug in
-      print "%a : %a = %a\n"
+      let env, x, v = Eval.CC.eval_program env f ~debug:!debug in
+      print_debug "original :: %a : %a = %a\n"
         pp_print_string x
         Pp.pp_ty2 u
         Pp.CC.pp_value v;
-      read_eval_print lexbuf env tyenv
+
+      (* Evaluation on kNormalized term *)
+      let kenv, kx, kv = Eval.KNorm.eval_program kenv kf ~debug:!debug in
+      print_debug "k-Normal :: ";
+      print "%a : %a = %a\n"
+        pp_print_string kx
+        Pp.pp_ty2 ku
+        Pp.KNorm.pp_value kv;
+
+      read_eval_print lexbuf env tyenv kenv
     with
     | Failure message ->
       print "Failure: %s\n" message;
@@ -60,7 +75,7 @@ let rec read_eval_print lexbuf env tyenv =
         | Neg -> print "Blame on the environment side:\n%a\n" Utils.Error.pp_range r
       end
   end;
-  read_eval_print lexbuf env tyenv
+  read_eval_print lexbuf env tyenv kenv
 
 let start file =
   let print_debug f = Utils.Format.make_print_debug !debug f in
@@ -78,7 +93,7 @@ let start file =
   in
   let env, tyenv = Stdlib.pervasives in
   try
-    read_eval_print lexbuf env tyenv
+    read_eval_print lexbuf env tyenv (Syntax.Environment.empty)
   with
     | Lexer.Eof ->
       (* Exiting normally *)

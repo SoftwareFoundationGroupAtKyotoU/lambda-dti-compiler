@@ -183,11 +183,11 @@ let run env tyenv program =
   let u'' = Typing.CC.type_of_program tyenv f in
   assert (Typing.is_equal u u'');
   try
-    let env, _, v = Eval.eval_program env f in
+    let env, _, v = Eval.CC.eval_program env f in
     env, tyenv, asprintf "%a" Pp.pp_ty2 u, asprintf "%a" Pp.CC.pp_value v
   with
-  | Eval.Blame (_, CC.Pos) -> env, tyenv, asprintf "%a" Pp.pp_ty2 u, "blame+"
-  | Eval.Blame (_, CC.Neg) -> env, tyenv, asprintf "%a" Pp.pp_ty2 u, "blame-"
+  | Eval.Blame (_, Pos) -> env, tyenv, asprintf "%a" Pp.pp_ty2 u, "blame+"
+  | Eval.Blame (_, Neg) -> env, tyenv, asprintf "%a" Pp.pp_ty2 u, "blame-"
 
 let test_examples =
   let test i cases =

@@ -119,8 +119,8 @@ let subst_type (s: (tyvar * ty) list) (u: ty) =
 (* When you're sure that this tyarg does not contain ν
  * you can convert it to ty *)
 let tyarg_to_ty = function
-  | CC.Ty u -> u
-  | CC.TyNu -> raise @@ Type_bug "failed to cast tyarg to ty"
+  | Ty u -> u
+  | TyNu -> raise @@ Type_bug "failed to cast tyarg to ty"
 
 module ITGL = struct
   open Pp.ITGL
@@ -449,9 +449,9 @@ module ITGL = struct
           let TyScheme (xs, u) = Environment.find x env in
           let ftvs = ftv_ty u in
           let s = Utils.List.zip xs !ys in
-          let ys = List.map (fun (x, u) -> if TV.mem x ftvs then CC.Ty u else CC.TyNu) s
+          let ys = List.map (fun (x, u) -> if TV.mem x ftvs then Ty u else TyNu) s
           in
-          let ys = ys @ Utils.List.repeat CC.TyNu (List.length xs - List.length ys) in
+          let ys = ys @ Utils.List.repeat TyNu (List.length xs - List.length ys) in
           let u = subst_type (List.filter (fun (x, _) -> TV.mem x ftvs) s) u in
           CC.Var (r, x, ys), u
         with Not_found ->

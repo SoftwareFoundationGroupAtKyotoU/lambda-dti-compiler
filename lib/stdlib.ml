@@ -71,7 +71,7 @@ let env, tyenv =
       let tyenv, e, _ = Typing.ITGL.normalize tyenv e u in
       let tyenv, f, _ = Typing.ITGL.translate tyenv e in
       let _ = Typing.CC.type_of_program tyenv f in
-      let env, _, _ = Eval.eval_program env f in
+      let env, _, _ = Eval.CC.eval_program env f in
       env, tyenv)
     (env, tyenv)
     implementations

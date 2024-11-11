@@ -6,6 +6,14 @@ exception Type_error of string
 (** Returns a fresh type variable. *)
 val fresh_tyvar : unit -> ty
 
+val dom : ty -> ty
+
+val cod : ty -> ty
+
+val meet : ty -> ty -> ty
+
+val type_of_binop : binop -> ty * ty * ty
+
 val is_equal : ty -> ty -> bool
 
 (* [X:->u] *)
@@ -14,7 +22,7 @@ type substitution = tyvar * ty
 type substitutions = substitution list
 val subst_type : substitutions -> ty -> ty
 
-val tyarg_to_ty : Syntax.CC.tyarg -> ty
+val tyarg_to_ty : Syntax.tyarg -> ty
 
 module ITGL : sig
   open Syntax.ITGL
