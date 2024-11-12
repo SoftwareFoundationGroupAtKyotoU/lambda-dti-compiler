@@ -173,7 +173,7 @@ let test_cases = [
 
 let id x = x
 
-let run env tyenv program =
+let run env tyenv kenv program =
   let parse str = Parser.toplevel Lexer.main @@ Lexing.from_string str in
   let e = parse @@ program ^ ";;" in
   let tyenv, e, u = Typing.ITGL.type_of_program tyenv e in
@@ -182,22 +182,29 @@ let run env tyenv program =
   assert (Typing.is_equal u u');
   let u'' = Typing.CC.type_of_program tyenv f in
   assert (Typing.is_equal u u'');
+  let kf, ku = KNormal.CC.k_normalize_program tyenv f in
+  assert (Typing.is_equal u ku);
   try
     let env, _, v = Eval.CC.eval_program env f in
-    env, tyenv, asprintf "%a" Pp.pp_ty2 u, asprintf "%a" Pp.CC.pp_value v
+    let kenv, _, kv = Eval.KNorm.eval_program kenv kf in
+    env, tyenv, kenv, asprintf "%a" Pp.pp_ty2 u, asprintf "%a" Pp.pp_ty2 ku, asprintf "%a" Pp.CC.pp_value v, asprintf "%a" Pp.KNorm.pp_value kv
   with
-  | Eval.Blame (_, Pos) -> env, tyenv, asprintf "%a" Pp.pp_ty2 u, "blame+"
-  | Eval.Blame (_, Neg) -> env, tyenv, asprintf "%a" Pp.pp_ty2 u, "blame-"
+  | Eval.Blame (_, Pos) -> env, tyenv, kenv, asprintf "%a" Pp.pp_ty2 u, asprintf "%a" Pp.pp_ty2 u', "blame+", "blame+"
+  | Eval.Blame (_, Neg) -> env, tyenv, kenv, asprintf "%a" Pp.pp_ty2 u, asprintf "%a" Pp.pp_ty2 u', "blame-", "blame-"
+  | Eval.KBlame (_, Pos) -> env, tyenv, kenv, asprintf "%a" Pp.pp_ty2 u, asprintf "%a" Pp.pp_ty2 u', "kblame+", "kblame+"
+  | Eval.KBlame (_, Neg) -> env, tyenv, kenv, asprintf "%a" Pp.pp_ty2 u, asprintf "%a" Pp.pp_ty2 u', "kblame-", "kblame-"
 
 let test_examples =
   let test i cases =
     (string_of_int i) >:: fun ctxt ->
       ignore @@ List.fold_left
-        (fun (env, tyenv) (program, expected_ty, expected_value) ->
-           let env, tyenv, actual_ty, actual_value = run env tyenv program in
+        (fun (env, tyenv, kenv) (program, expected_ty, expected_value) ->
+           let env, tyenv, kenv, actual_ty, actual_kty, actual_value, actual_kvalue = run env tyenv kenv program in
            assert_equal ~ctxt:ctxt ~printer:id expected_ty actual_ty;
+           assert_equal ~ctxt:ctxt ~printer:id expected_ty actual_kty;
            assert_equal ~ctxt:ctxt ~printer:id expected_value actual_value;
-           env, tyenv
+           assert_equal ~ctxt:ctxt ~printer:id expected_value actual_kvalue;
+           env, tyenv, kenv
         )
         Stdlib.pervasives
         cases
