@@ -86,7 +86,7 @@ module CC = struct
     | Var (r, _, _) | BConst (r, _) | IfExp (r, _, _, _) | AppExp (r, _, _) | LetExp (r, _, _, _, _) | CastExp (r, _, _, _, _) as f ->
       let fu = k_normalize_exp tyenv f in 
       fu, (KNorm.BConst (r, true), TyBool), true, true
-    | _ -> raise @@ KNormal_bug "if-cond type should bool"
+    | IConst _ | UConst _ | FunExp _ | FixExp _ -> raise @@ KNormal_bug "if-cond type should bool"
 
   let k_normalize_program tyenv = function
     | Exp f -> let f, u = k_normalize_exp tyenv f in KNorm.Exp f, u
