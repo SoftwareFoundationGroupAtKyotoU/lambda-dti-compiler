@@ -61,8 +61,6 @@ module CC = struct
       begin match u1 with
         | TyFun (_, u12) -> 
           insert_let fu1 (fun x -> (insert_let fu2 (fun y -> KNorm.AppExp (r, x, y), u12)))
-        | TyDyn ->
-          insert_let fu1 (fun x -> (insert_let fu2 (fun y -> KNorm.AppExp (r, x, y), TyDyn)))
         | _ -> raise @@ KNormal_bug "app: not fun application"
       end
     | CastExp (r, f, u1, u2, p) ->
@@ -85,7 +83,7 @@ module CC = struct
         | Gte -> cond_if tyenv (IfExp (r, BinOp (r, Lte, f1, f2), IfExp (r, BinOp (r, Eq, f1, f2), BConst (r, true), BConst (r, false)), BConst (r, true)))
         | _ -> raise @@ KNormal_bug "if-cond type should bool"
       end
-    | Var (r, _, _) | BConst (r, _) | IfExp (r, _, _, _) | AppExp (r, _, _) | LetExp (r, _, _, _, _) as f ->
+    | Var (r, _, _) | BConst (r, _) | IfExp (r, _, _, _) | AppExp (r, _, _) | LetExp (r, _, _, _, _) | CastExp (r, _, _, _, _) as f ->
       let fu = k_normalize_exp tyenv f in 
       fu, (KNorm.BConst (r, true), TyBool), true, true
     | _ -> raise @@ KNormal_bug "if-cond type should bool"

@@ -91,9 +91,9 @@ let start file =
         lexbuf.lex_curr_p <- {lexbuf.lex_curr_p with pos_fname = f};
         channel, lexbuf
   in
-  let env, tyenv = Stdlib.pervasives in
+  let env, tyenv, kenv = Stdlib.pervasives in
   try
-    read_eval_print lexbuf env tyenv (Syntax.Environment.empty)
+    read_eval_print lexbuf env tyenv kenv
   with
     | Lexer.Eof ->
       (* Exiting normally *)
