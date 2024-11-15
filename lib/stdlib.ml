@@ -101,14 +101,14 @@ let env, tyenv, kenv =
  List.fold_left
     (fun (env, tyenv, kenv) str ->
       let e = Parser.toplevel Lexer.main @@ Lexing.from_string str in
-      let tyenv, e, u = Typing.ITGL.type_of_program tyenv e in
+      let e, u = Typing.ITGL.type_of_program tyenv e in
       let tyenv, e, _ = Typing.ITGL.normalize tyenv e u in
-      let tyenv, f, _ = Typing.ITGL.translate tyenv e in
+      let new_tyenv, f, _ = Typing.ITGL.translate tyenv e in
       let _ = Typing.CC.type_of_program tyenv f in
       let env, _, _ = Eval.CC.eval_program env f in
       let kf, _ = KNormal.CC.k_normalize_program tyenv f in
       let kenv, _, _ = Eval.KNorm.eval_program kenv kf in
-      env, tyenv, kenv)
+      env, new_tyenv, kenv)
     (env, tyenv, kenv)
     implementations
 

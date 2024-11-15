@@ -156,6 +156,11 @@ let test_cases = [
     "let dyn x = ((fun (y: 'b) -> y): ? -> ?) x", "'a -> ?", "<fun>";
     "f (dyn 2) (dyn true)", "int", "0";
   ];
+  [
+    "let f = fun x -> x", "'a -> 'a", "<fun>";
+    "let f = fun x -> x f", "(('a -> 'a) -> 'b) -> 'b", "<fun>";
+    "f (fun x -> x) 4", "int", "4"
+  ];
   (* let-poly & recursion *)
   ["let rec fact n = if n <= 1 then 1 else n * fact (n - 1) in fact 5", "int", "120"];
   ["let rec fact (n:?) = if n <= 1 then 1 else n * fact (n - 1) in fact 5", "int", "120"];
@@ -176,9 +181,9 @@ let id x = x
 let run env tyenv kenv program =
   let parse str = Parser.toplevel Lexer.main @@ Lexing.from_string str in
   let e = parse @@ program ^ ";;" in
-  let tyenv, e, u = Typing.ITGL.type_of_program tyenv e in
+  let e, u = Typing.ITGL.type_of_program tyenv e in
   let tyenv, e, u = Typing.ITGL.normalize tyenv e u in
-  let tyenv, f, u' = Typing.ITGL.translate tyenv e in
+  let new_tyenv, f, u' = Typing.ITGL.translate tyenv e in
   assert (Typing.is_equal u u');
   let u'' = Typing.CC.type_of_program tyenv f in
   assert (Typing.is_equal u u'');
@@ -187,7 +192,7 @@ let run env tyenv kenv program =
   try
     let env, _, v = Eval.CC.eval_program env f in
     let kenv, _, kv = Eval.KNorm.eval_program kenv kf in
-    env, tyenv, kenv, asprintf "%a" Pp.pp_ty2 u, asprintf "%a" Pp.pp_ty2 ku, asprintf "%a" Pp.CC.pp_value v, asprintf "%a" Pp.KNorm.pp_value kv
+    env, new_tyenv, kenv, asprintf "%a" Pp.pp_ty2 u, asprintf "%a" Pp.pp_ty2 ku, asprintf "%a" Pp.CC.pp_value v, asprintf "%a" Pp.KNorm.pp_value kv
   with
   | Eval.Blame (_, Pos) -> env, tyenv, kenv, asprintf "%a" Pp.pp_ty2 u, asprintf "%a" Pp.pp_ty2 u', "blame+", "blame+"
   | Eval.Blame (_, Neg) -> env, tyenv, kenv, asprintf "%a" Pp.pp_ty2 u, asprintf "%a" Pp.pp_ty2 u', "blame-", "blame-"
