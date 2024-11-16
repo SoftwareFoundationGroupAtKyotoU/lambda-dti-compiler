@@ -3,7 +3,7 @@ open Lambda_dti
 
 let debug = ref false
 
-let rec read_eval_print lexbuf env tyenv kenv =
+let rec read_eval_print lexbuf env tyenv kfunenvs kenv =
   (* Used in all modes *)
   let print f = fprintf std_formatter f in
   (* Used in debug mode *)
@@ -38,7 +38,7 @@ let rec read_eval_print lexbuf env tyenv kenv =
 
       (* k-Normalization *)
       print_debug "***** kNormal *****\n";
-      let kf, ku = KNormal.CC.k_normalize_program tyenv f in
+      let kf, ku, kfunenvs = KNormal.kNorm_funs tyenv kfunenvs f ~debug:!debug in
       print_debug "kf: %a\n" Pp.KNorm.pp_program kf;
       assert (Typing.is_equal u ku);
 
@@ -58,7 +58,7 @@ let rec read_eval_print lexbuf env tyenv kenv =
         Pp.pp_ty2 ku
         Pp.KNorm.pp_value kv;
 
-      read_eval_print lexbuf env new_tyenv kenv
+      read_eval_print lexbuf env new_tyenv kfunenvs kenv
     with
     | Failure message ->
       print "Failure: %s\n" message;
@@ -75,7 +75,7 @@ let rec read_eval_print lexbuf env tyenv kenv =
         | Neg -> print "Blame on the environment side:\n%a\n" Utils.Error.pp_range r
       end
   end;
-  read_eval_print lexbuf env tyenv kenv
+  read_eval_print lexbuf env tyenv kfunenvs kenv
 
 let start file =
   let print_debug f = Utils.Format.make_print_debug !debug f in
@@ -91,9 +91,9 @@ let start file =
         lexbuf.lex_curr_p <- {lexbuf.lex_curr_p with pos_fname = f};
         channel, lexbuf
   in
-  let env, tyenv, kenv = Stdlib.pervasives in
+  let env, tyenv, kfunenvs, kenv = Stdlib.pervasives in
   try
-    read_eval_print lexbuf env tyenv kenv
+    read_eval_print lexbuf env tyenv kfunenvs kenv
   with
     | Lexer.Eof ->
       (* Exiting normally *)

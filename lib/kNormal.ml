@@ -1,21 +1,22 @@
 open Syntax
+open Format
 
 exception KNormal_error of string
 exception KNormal_bug of string
 
 let subst_type = Typing.subst_type
 
+(* generate variable string for insert_let *)
+let genvar = 
+  let counter = ref 0 in
+  let body () =
+    let v = !counter in
+    counter := v + 1;
+    Printf.sprintf "_var%d" !counter
+  in body
+
 module CC = struct
   open Syntax.CC
-
-  (* generate variable string for insert_let *)
-  let genvar = 
-    let counter = ref 0 in
-    let body () =
-      let v = !counter in
-      counter := v + 1;
-      Printf.sprintf "_var%d" !counter
-    in body
 
   let insert_let (f, _) (k: KNorm.k_id -> KNorm.exp * ty) = match f with
     | KNorm.Var (_, x) -> k x
@@ -92,3 +93,47 @@ module CC = struct
     | Exp f -> let f, u = k_normalize_exp tyenv f in KNorm.Exp f, u
     | LetDecl (x, tvs, f) -> let f, u = k_normalize_exp tyenv f in KNorm.LetDecl (x, tvs, f), u
 end
+
+module KNorm = struct
+  open Syntax.KNorm
+
+  (* alpha : 変数の名前が被らないように付け替える *)
+  let find (x, tas as kid) idenv = try (Environment.find x idenv, tas) with Not_found -> kid
+
+  let create_id x idenv = if Environment.mem x idenv then genvar () else x
+
+  let rec alpha_exp idenv = function
+    | Var (r, kid) -> Var (r, find kid idenv)
+    | IConst _ | BConst _ | UConst _ as f -> f
+    | BinOp (r, op, kid1, kid2) -> BinOp (r, op, find kid1 idenv, find kid2 idenv)
+    | IfEqExp (r, kid1, kid2, f1, f2) ->
+      IfEqExp (r, find kid1 idenv, find kid2 idenv, alpha_exp idenv f1, alpha_exp idenv f2)
+    | IfLteExp (r, kid1, kid2, f1, f2) ->
+      IfLteExp (r, find kid1 idenv, find kid2 idenv, alpha_exp idenv f1, alpha_exp idenv f2)
+    | FunExp (r, x, u, f) -> 
+      let newx = create_id x idenv in
+      FunExp (r, newx, u, alpha_exp (Environment.add x newx idenv) f)
+    | FixExp (r, x, y, u1, u2, f) ->
+      let newx = create_id x idenv in
+      let newy = create_id y (Environment.add x newx idenv) in
+      FixExp (r, newx, newy, u1, u2, alpha_exp (Environment.add y newy @@ Environment.add x newx idenv) f)
+    | AppExp (r, kid1, kid2) -> AppExp (r, find kid1 idenv, find kid2 idenv)
+    | CastExp (r, f, u1, u2, p) ->
+      CastExp (r, alpha_exp idenv f, u1, u2, p)
+    | LetExp (r, x, tvs, f1, f2) -> 
+      let newx = create_id x idenv in
+      LetExp (r, newx, tvs, alpha_exp idenv f1, alpha_exp (Environment.add x newx idenv) f2)
+
+  let alpha_program idenv = function
+    | Exp f -> Exp (alpha_exp idenv f), idenv
+    | LetDecl (x, tvs, f) -> 
+      let newx = create_id x idenv in
+      LetDecl (newx, tvs, alpha_exp idenv f), Environment.add x newx idenv
+end
+
+let kNorm_funs ?(debug=false) tyenv (alphaenv) f = 
+  let f, u = CC.k_normalize_program tyenv f in
+  if debug then fprintf err_formatter "k_normalize: %a\n" Pp.KNorm.pp_program f;
+  let f, alphaenv = KNorm.alpha_program alphaenv f in
+  if debug then fprintf err_formatter "alpha: %a\n" Pp.KNorm.pp_program f;
+  f, u, (alphaenv)

@@ -3,7 +3,7 @@ open Syntax
 exception Stdlib_bug of string
 exception Stdlib_exit of int
 
-let env, tyenv, kenv = Environment.empty, Environment.empty, Environment.empty
+let env, tyenv, kfunenvs, kenv = Environment.empty, Environment.empty, (Environment.empty), Environment.empty
 
 let is_some_type = tysc_of_ty @@ TyFun (TyDyn, TyBool)
 
@@ -80,11 +80,11 @@ let implementations = [
   "print_newline", [], CC.lib_print_newline, tysc_of_ty @@ TyFun (TyUnit, TyUnit), KNorm.lib_print_newline;
 ]
 
-let env, tyenv, kenv =
+let env, tyenv, kfunenvs, kenv =
   List.fold_left
-    (fun (env, tyenv, kenv) (x, xs, v, u, kv) ->
-       Environment.add x (xs, v) env,  Environment.add x u tyenv, Environment.add x (xs, kv) kenv)
-    (env, tyenv, kenv)
+    (fun (env, tyenv, (alphaenv), kenv) (x, xs, v, u, kv) ->
+       Environment.add x (xs, v) env, Environment.add x u tyenv, (Environment.add x x alphaenv), Environment.add x (xs, kv) kenv)
+    (env, tyenv, kfunenvs, kenv)
     implementations
 
 let implementations = [
@@ -97,19 +97,19 @@ let implementations = [
   "let ignore x = ();;";
 ]
 
-let env, tyenv, kenv =
+let env, tyenv, kfunenvs, kenv =
  List.fold_left
-    (fun (env, tyenv, kenv) str ->
+    (fun (env, tyenv, kfunenvs, kenv) str ->
       let e = Parser.toplevel Lexer.main @@ Lexing.from_string str in
       let e, u = Typing.ITGL.type_of_program tyenv e in
       let tyenv, e, _ = Typing.ITGL.normalize tyenv e u in
       let new_tyenv, f, _ = Typing.ITGL.translate tyenv e in
       let _ = Typing.CC.type_of_program tyenv f in
       let env, _, _ = Eval.CC.eval_program env f in
-      let kf, _ = KNormal.CC.k_normalize_program tyenv f in
+      let kf, _, kfunenvs = KNormal.kNorm_funs tyenv kfunenvs f in
       let kenv, _, _ = Eval.KNorm.eval_program kenv kf in
-      env, new_tyenv, kenv)
-    (env, tyenv, kenv)
+      env, new_tyenv, kfunenvs, kenv)
+    (env, tyenv, kfunenvs, kenv)
     implementations
 
-let pervasives = env, tyenv, kenv
+let pervasives = env, tyenv, kfunenvs, kenv
