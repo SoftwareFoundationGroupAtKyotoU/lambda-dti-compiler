@@ -129,11 +129,42 @@ module KNorm = struct
     | LetDecl (x, tvs, f) -> 
       let newx = create_id x idenv in
       LetDecl (newx, tvs, alpha_exp idenv f), Environment.add x newx idenv
+
+  (* beta : let x = y in ... となっているようなxをyに置き換える *)
+  let rec beta_exp idenv = function
+    | Var (r, kid) -> Var (r, find kid idenv)
+    | IConst _ | BConst _ | UConst _ as f -> f
+    | BinOp (r, op, kid1, kid2) -> BinOp (r, op, find kid1 idenv, find kid2 idenv)
+    | IfEqExp (r, kid1, kid2, f1, f2) ->
+      IfEqExp (r, find kid1 idenv, find kid2 idenv, beta_exp idenv f1, beta_exp idenv f2)
+    | IfLteExp (r, kid1, kid2, f1, f2) ->
+      IfLteExp (r, find kid1 idenv, find kid2 idenv, beta_exp idenv f1, beta_exp idenv f2)
+    | FunExp (r, x, u, f) -> FunExp (r, x, u, beta_exp idenv f)
+    | FixExp (r, x, y, u1, u2, f) -> FixExp (r, x, y, u1, u2, beta_exp idenv f)
+    | AppExp (r, kid1, kid2) -> AppExp (r, find kid1 idenv, find kid2 idenv)
+    | CastExp (r, f, u1, u2, p) -> CastExp (r, beta_exp idenv f, u1, u2, p)
+    | LetExp (r, x, tvs, f1, f2) ->
+      let f1 = beta_exp idenv f1 in
+      begin match f1 with
+        | Var (_, (x', _)) -> beta_exp (Environment.add x x' idenv) f2
+        | f1 -> LetExp (r, x, tvs, f1, beta_exp idenv f2)
+      end
+
+  let beta_program idenv = function
+    | Exp f -> Exp (beta_exp idenv f), idenv
+    | LetDecl (x, tvs, f) ->
+      let f = beta_exp idenv f in
+      begin match f with
+      | Var (_, (x', _)) as f -> Exp f, Environment.add x x' idenv
+      | f -> LetDecl (x, tvs, f), idenv
+      end
 end
 
-let kNorm_funs ?(debug=false) tyenv (alphaenv) f = 
+let kNorm_funs ?(debug=false) tyenv (alphaenv, betaenv) f = 
   let f, u = CC.k_normalize_program tyenv f in
   if debug then fprintf err_formatter "k_normalize: %a\n" Pp.KNorm.pp_program f;
   let f, alphaenv = KNorm.alpha_program alphaenv f in
   if debug then fprintf err_formatter "alpha: %a\n" Pp.KNorm.pp_program f;
-  f, u, (alphaenv)
+  let f, betaenv = KNorm.beta_program betaenv f in
+  if debug then fprintf err_formatter "beta: %a\n" Pp.KNorm.pp_program f;
+  f, u, (alphaenv, betaenv)

@@ -173,6 +173,10 @@ let test_cases = [
   (* stdlib *)
   ["succ 2", "int", "3"];
   ["prec 0", "int", "-1"];
+  (* alpha, beta *)
+  ["let x = 2 in let x = 4 in x + x", "int", "8"];
+  ["let x = 2 in let y = x in (fun y -> y) y", "int", "2"];
+  ["let x = 2 in let a = x in let b = a in let c = x in let d = a in let e = x in e", "int", "2"];
 ]
 
 

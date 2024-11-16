@@ -3,7 +3,7 @@ open Syntax
 exception Stdlib_bug of string
 exception Stdlib_exit of int
 
-let env, tyenv, kfunenvs, kenv = Environment.empty, Environment.empty, (Environment.empty), Environment.empty
+let env, tyenv, kfunenvs, kenv = Environment.empty, Environment.empty, (Environment.empty, Environment.empty), Environment.empty
 
 let is_some_type = tysc_of_ty @@ TyFun (TyDyn, TyBool)
 
@@ -82,8 +82,8 @@ let implementations = [
 
 let env, tyenv, kfunenvs, kenv =
   List.fold_left
-    (fun (env, tyenv, (alphaenv), kenv) (x, xs, v, u, kv) ->
-       Environment.add x (xs, v) env, Environment.add x u tyenv, (Environment.add x x alphaenv), Environment.add x (xs, kv) kenv)
+    (fun (env, tyenv, (alphaenv, betaenv), kenv) (x, xs, v, u, kv) ->
+       Environment.add x (xs, v) env, Environment.add x u tyenv, (Environment.add x x alphaenv, Environment.add x x betaenv), Environment.add x (xs, kv) kenv)
     (env, tyenv, kfunenvs, kenv)
     implementations
 
