@@ -158,6 +158,24 @@ module KNorm = struct
       | Var (_, (x', _)) as f -> Exp f, Environment.add x x' idenv
       | f -> LetDecl (x, tvs, f), idenv
       end
+
+  (* assoc : let x = (let y = ... in ... ) in ...というようなネストされたletをlet y = ... in let x = ... in ...という形に平たくする *)
+  let rec assoc_exp = function
+    | IfEqExp (r, x, y, f1, f2) -> IfEqExp (r, x, y, assoc_exp f1, assoc_exp f2)
+    | IfLteExp (r, x, y, f1, f2) -> IfLteExp (r, x, y, assoc_exp f1, assoc_exp f2)
+    | FunExp (r, x, u, f) -> FunExp (r, x, u, assoc_exp f)
+    | FixExp (r, x, y, u1, u2, f) -> FixExp (r, x, y, u1, u2, assoc_exp f)
+    | CastExp (r, f, u1, u2, p) -> CastExp (r, assoc_exp f, u1, u2, p)
+    | LetExp (r, x, tvs, f1, f2) ->
+      let rec insert = function
+        | LetExp (r', x', tvs', f3, f4) -> LetExp (r', x', tvs', f3, insert f4)
+        | f1 -> LetExp (r, x, tvs, f1, assoc_exp f2)
+      in insert (assoc_exp f1)
+    | f -> f
+  
+  let assoc_program = function
+    | Exp f -> Exp (assoc_exp f)
+    | LetDecl (x, tvs, f) -> LetDecl (x, tvs, assoc_exp f)
 end
 
 let kNorm_funs ?(debug=false) tyenv (alphaenv, betaenv) f = 
@@ -167,4 +185,6 @@ let kNorm_funs ?(debug=false) tyenv (alphaenv, betaenv) f =
   if debug then fprintf err_formatter "alpha: %a\n" Pp.KNorm.pp_program f;
   let f, betaenv = KNorm.beta_program betaenv f in
   if debug then fprintf err_formatter "beta: %a\n" Pp.KNorm.pp_program f;
+  let f = KNorm.assoc_program f in
+  if debug then fprintf err_formatter "assoc: %a\n" Pp.KNorm.pp_program f;
   f, u, (alphaenv, betaenv)
