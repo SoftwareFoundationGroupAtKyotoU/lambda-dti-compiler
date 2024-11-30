@@ -225,7 +225,6 @@ module KNorm = struct
   type exp =
     | Var of range * k_id
     | IConst of range * int
-    | BConst of range * bool
     | UConst of range
     | BinOp of range * binop * k_id * k_id
     | IfEqExp of range * k_id * k_id * exp * exp
@@ -239,7 +238,6 @@ module KNorm = struct
   let range_of_exp = function
     | Var (r, _)
     | IConst (r, _)
-    | BConst (r, _)
     | UConst r
     | BinOp (r, _, _, _)
     | IfEqExp (r, _, _, _, _)
@@ -294,7 +292,6 @@ module KNorm = struct
 
   type value =
     | IntV of int
-    | BoolV of bool
     | UnitV
     | FunV of ((tyvar list * ty list) -> value -> value)
     | Tagged of tag * value

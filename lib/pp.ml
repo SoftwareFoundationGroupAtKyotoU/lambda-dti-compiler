@@ -314,7 +314,7 @@ module KNorm = struct
         pp_list @@ List.map (fun x -> TyVar x) tvs
 
   let gt_exp e e1 = match e, e1 with
-    | (Var _ | IConst _ | BConst _ | UConst _), _ -> raise @@ Syntax_error(* "gt_exp: value-exp was given as e"*)
+    | (Var _ | IConst _ | UConst _), _ -> raise @@ Syntax_error(* "gt_exp: value-exp was given as e"*)
     | (BinOp _ | AppExp _), _ -> raise @@ Syntax_error(* "gt_exp : expression not contain exp was given as e"*)
     | (IfEqExp _ | IfLteExp _), (FunExp _ | LetExp _) -> true
     | _ -> false
@@ -328,7 +328,6 @@ module KNorm = struct
   let rec pp_exp ppf = function
     | Var (_, k_x) -> pp_print_k_id ppf k_x
     | IConst (_, i) -> pp_print_int ppf i
-    | BConst (_, b) -> pp_print_bool ppf b
     | UConst _ -> pp_print_string ppf "()"
     | BinOp (_, op, k_x1, k_x2) ->
       fprintf ppf "%a %a %a"
@@ -394,7 +393,6 @@ module KNorm = struct
   let pp_tag ppf t = pp_ty ppf @@ tag_to_ty t
 
   let rec pp_value ppf = function
-    | BoolV b -> pp_print_bool ppf b
     | IntV i -> pp_print_int ppf i
     | UnitV -> pp_print_string ppf "()"
     | FunV _ -> pp_print_string ppf "<fun>"

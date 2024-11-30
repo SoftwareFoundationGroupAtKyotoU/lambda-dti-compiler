@@ -41,8 +41,8 @@ module KNorm = struct
   open Syntax.KNorm
 
   let is_some u = FunV (fun _ -> function
-    | Tagged (t, _) when u = tag_to_ty t -> BoolV true
-    | Tagged _ -> BoolV false
+    | Tagged (t, _) when u = tag_to_ty t -> IntV 1
+    | Tagged _ -> IntV 0
     | _ -> raise @@ Stdlib_bug "untagged value"
   )
 
@@ -52,7 +52,8 @@ module KNorm = struct
   )
 
   let lib_print_bool = FunV (fun _ -> function
-    | BoolV b -> print_string @@ string_of_bool b; UnitV
+    | IntV 1 -> print_string "true"; UnitV
+    | IntV 0 -> print_string "false"; UnitV
     | _ -> raise @@ Stdlib_bug "print_bool: unexpected value"
   )
 

@@ -201,7 +201,7 @@ module KNorm = struct
       | TyNu -> TyNu
     in let subst s (x, tas) = (x, List.map (subst_type_k s) tas) in function
     | Var (r, kid) -> Var (r, subst s kid)
-    | IConst _ | BConst _ | UConst _ as f -> f
+    | IConst _ | UConst _ as f -> f
     | BinOp (r, op, kid1, kid2) -> BinOp (r, op, subst s kid1, subst s kid2)
     | IfEqExp (r, kid1, kid2, f1, f2) -> IfEqExp (r, subst s kid1, subst s kid2, subst_exp s f1, subst_exp s f2)
     | IfLteExp (r, kid1, kid2, f1, f2) -> IfLteExp (r, subst s kid1, subst s kid2, subst_exp s f1, subst_exp s f2)
@@ -219,12 +219,12 @@ module KNorm = struct
     | Mult, IntV i1, IntV i2 -> IntV (i1 * i2)
     | Div, IntV i1, IntV i2 -> IntV (i1 / i2)
     | Mod, IntV i1, IntV i2 -> IntV (i1 mod i2)
-    | Eq, IntV i1, IntV i2 -> BoolV (i1 = i2)
-    | Neq, IntV i1, IntV i2 -> BoolV (i1 <> i2)
-    | Lt, IntV i1, IntV i2 -> BoolV (i1 < i2)
-    | Lte, IntV i1, IntV i2 -> BoolV (i1 <= i2)
-    | Gt, IntV i1, IntV i2 -> BoolV (i1 > i2)
-    | Gte, IntV i1, IntV i2 -> BoolV (i1 >= i2)
+    | Eq, IntV i1, IntV i2 -> if i1 = i2 then IntV 1 else IntV 0
+    | Neq, IntV i1, IntV i2 -> if i1 <> i2 then IntV 1 else IntV 0
+    | Lt, IntV i1, IntV i2 -> if i1 < i2 then IntV 1 else IntV 0
+    | Lte, IntV i1, IntV i2 -> if i1 <= i2 then IntV 1 else IntV 0
+    | Gt, IntV i1, IntV i2 -> if i1 > i2 then IntV 1 else IntV 0
+    | Gte, IntV i1, IntV i2 -> if i1 >= i2 then IntV 1 else IntV 0
     | _ -> raise @@ Eval_bug "binop: unexpected type of argument"
 
   let rec eval_exp ?(debug=false) kenv f = 
@@ -239,7 +239,6 @@ module KNorm = struct
         | _ -> v
       end
     | IConst (_, i) -> IntV i
-    | BConst (_, b) -> BoolV b
     | UConst _ -> UnitV
     | BinOp (_, op, (x1, _), (x2, _)) ->
       let _, v1 = Environment.find x1 kenv in
@@ -248,7 +247,10 @@ module KNorm = struct
     | IfEqExp (_, (x1, _), (x2, _), f2, f3) ->
       let _, v1 = Environment.find x1 kenv in
       let _, v2 = Environment.find x2 kenv in
-      if v1 = v2 then eval_exp kenv f2 else eval_exp kenv f3
+      begin match v1, v2 with
+        | IntV i1, IntV i2 -> if i1 = i2 then eval_exp kenv f2 else eval_exp kenv f3
+        | _ -> raise @@ Eval_bug "IfEqExp: not int value"
+      end
     | IfLteExp (_, (x1, _), (x2, _), f2, f3) ->
       let _, v1 = Environment.find x1 kenv in
       let _, v2 = Environment.find x2 kenv in

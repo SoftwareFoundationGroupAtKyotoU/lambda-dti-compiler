@@ -35,7 +35,7 @@ module CC = struct
       let u = subst_type s u in
       KNorm.Var (r, (x, tas)), u
     | IConst (r, i) -> KNorm.IConst (r, i), TyInt
-    | BConst (r, b) -> KNorm.BConst (r, b), TyBool
+    | BConst (r, b) -> let i = if b then 1 else 0 in KNorm.IConst (r, i), TyBool
     | UConst r -> KNorm.UConst r, TyUnit
     | BinOp (r, op, f1, f2) -> 
       let _, _, ui = Typing.type_of_binop op in
@@ -86,7 +86,7 @@ module CC = struct
       end
     | Var (r, _, _) | BConst (r, _) | IfExp (r, _, _, _) | AppExp (r, _, _) | LetExp (r, _, _, _, _) | CastExp (r, _, _, _, _) as f ->
       let fu = k_normalize_exp tyenv f in 
-      fu, (KNorm.BConst (r, true), TyBool), true, true
+      fu, (KNorm.IConst (r, 1), TyBool), true, true
     | IConst _ | UConst _ | FunExp _ | FixExp _ -> raise @@ KNormal_bug "if-cond type should bool"
 
   let k_normalize_program tyenv = function
@@ -104,7 +104,7 @@ module KNorm = struct
 
   let rec alpha_exp idenv = function
     | Var (r, kid) -> Var (r, find kid idenv)
-    | IConst _ | BConst _ | UConst _ as f -> f
+    | IConst _ | UConst _ as f -> f
     | BinOp (r, op, kid1, kid2) -> BinOp (r, op, find kid1 idenv, find kid2 idenv)
     | IfEqExp (r, kid1, kid2, f1, f2) ->
       IfEqExp (r, find kid1 idenv, find kid2 idenv, alpha_exp idenv f1, alpha_exp idenv f2)
@@ -133,7 +133,7 @@ module KNorm = struct
   (* beta : let x = y in ... となっているようなxをyに置き換える *)
   let rec beta_exp idenv = function
     | Var (r, kid) -> Var (r, find kid idenv)
-    | IConst _ | BConst _ | UConst _ as f -> f
+    | IConst _ | UConst _ as f -> f
     | BinOp (r, op, kid1, kid2) -> BinOp (r, op, find kid1 idenv, find kid2 idenv)
     | IfEqExp (r, kid1, kid2, f1, f2) ->
       IfEqExp (r, find kid1 idenv, find kid2 idenv, beta_exp idenv f1, beta_exp idenv f2)
