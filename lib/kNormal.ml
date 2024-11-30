@@ -65,8 +65,8 @@ module CC = struct
         | _ -> raise @@ KNormal_bug "app: not fun application"
       end
     | CastExp (r, f, u1, u2, p) ->
-      let f, _ = k_normalize_exp tyenv f in
-      KNorm.CastExp (r, f, u1, u2, p), u2
+      let fu = k_normalize_exp tyenv f in
+      insert_let fu (fun x -> KNorm.CastExp (r, x, u1, u2, p), u2)
     | LetExp (r, x, tvs, f1, f2) -> 
       let f1', u1 = k_normalize_exp tyenv f1 in
       let f2', u2 = k_normalize_exp (Environment.add x (TyScheme (tvs, u1)) tyenv) f2 in
@@ -118,8 +118,8 @@ module KNorm = struct
       let newy = create_id y (Environment.add x newx idenv) in
       FixExp (r, newx, newy, u1, u2, alpha_exp (Environment.add y newy @@ Environment.add x newx idenv) f)
     | AppExp (r, kid1, kid2) -> AppExp (r, find kid1 idenv, find kid2 idenv)
-    | CastExp (r, f, u1, u2, p) ->
-      CastExp (r, alpha_exp idenv f, u1, u2, p)
+    | CastExp (r, kid, u1, u2, p) ->
+      CastExp (r, find kid idenv, u1, u2, p)
     | LetExp (r, x, tvs, f1, f2) -> 
       let newx = create_id x idenv in
       LetExp (r, newx, tvs, alpha_exp idenv f1, alpha_exp (Environment.add x newx idenv) f2)
@@ -142,7 +142,7 @@ module KNorm = struct
     | FunExp (r, x, u, f) -> FunExp (r, x, u, beta_exp idenv f)
     | FixExp (r, x, y, u1, u2, f) -> FixExp (r, x, y, u1, u2, beta_exp idenv f)
     | AppExp (r, kid1, kid2) -> AppExp (r, find kid1 idenv, find kid2 idenv)
-    | CastExp (r, f, u1, u2, p) -> CastExp (r, beta_exp idenv f, u1, u2, p)
+    | CastExp (r, kid, u1, u2, p) -> CastExp (r, find kid idenv, u1, u2, p)
     | LetExp (r, x, tvs, f1, f2) ->
       let f1 = beta_exp idenv f1 in
       begin match f1 with
@@ -165,7 +165,6 @@ module KNorm = struct
     | IfLteExp (r, x, y, f1, f2) -> IfLteExp (r, x, y, assoc_exp f1, assoc_exp f2)
     | FunExp (r, x, u, f) -> FunExp (r, x, u, assoc_exp f)
     | FixExp (r, x, y, u1, u2, f) -> FixExp (r, x, y, u1, u2, assoc_exp f)
-    | CastExp (r, f, u1, u2, p) -> CastExp (r, assoc_exp f, u1, u2, p)
     | LetExp (r, x, tvs, f1, f2) ->
       let rec insert = function
         | LetExp (r', x', tvs', f3, f4) -> LetExp (r', x', tvs', f3, insert f4)

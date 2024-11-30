@@ -362,19 +362,11 @@ module KNorm = struct
       fprintf ppf "%a %a"
         pp_print_k_id k_x1
         pp_print_k_id k_x2
-    | CastExp (_, f1, u1, u2, _) as f ->
-      begin match f1 with
-        | CastExp (_, _, _, u1', _) when u1' = u1 -> 
-          fprintf ppf "%a => %a"
-            (with_paren (gt_exp f f1) pp_exp) f1
-            pp_ty u2
-        | CastExp _ -> raise @@ Syntax_error(* "Cast not match"*)
-        | _ -> 
-          fprintf ppf "%a: %a => %a"
-            (with_paren (gt_exp f f1) pp_exp) f1
-            pp_ty u1
-            pp_ty u2
-      end
+    | CastExp (_, k_x, u1, u2, _) ->
+        fprintf ppf "%a: %a => %a"
+          pp_print_k_id k_x
+          pp_ty u1
+          pp_ty u2
     | LetExp (_, x, tvs, e1, e2) as e ->
         fprintf ppf "let %s = %a%a in %a"
           x

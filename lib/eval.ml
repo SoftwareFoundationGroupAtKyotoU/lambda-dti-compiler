@@ -208,7 +208,7 @@ module KNorm = struct
     | FunExp (r, x, u, f) -> FunExp (r, x, subst_type s u, subst_exp s f)
     | FixExp (r, x, y, u1, u2, e) -> FixExp (r, x, y, subst_type s u1, subst_type s u2, subst_exp s e)
     | AppExp (r, kid1, kid2) -> AppExp (r, subst s kid1, subst s kid2)
-    | CastExp (r, f, u1, u2, p) -> CastExp (r, subst_exp s f, subst_type s u1, subst_type s u2, p)
+    | CastExp (r, kid, u1, u2, p) -> CastExp (r, subst s kid, subst_type s u1, subst_type s u2, p)
     | LetExp (r, x, ts, f1, f2) ->
       let s = List.filter (fun (x, _) -> not @@ List.memq x ts) s in
       LetExp (r, x, ts, subst_exp s f1, subst_exp s f2)
@@ -281,8 +281,8 @@ module KNorm = struct
         | FunV proc -> proc (tvs1, us1) v2 
         | _ -> raise @@ Eval_bug "AppExp: not fun value"
       end
-    | CastExp (r, f, u1, u2, p) ->
-      let v = eval_exp kenv f in
+    | CastExp (r, (x, _), u1, u2, p) ->
+      let _, v = Environment.find x kenv in
       cast ~debug:debug v u1 u2 r p
     | LetExp (_, x, tvs, f1, f2) -> 
       let v1 = eval_exp kenv f1 in
