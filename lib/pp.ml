@@ -367,18 +367,20 @@ module KNorm = struct
           pp_print_k_id k_x
           pp_ty u1
           pp_ty u2
-    | LetExp (_, x, tvs, e1, e2) as e ->
-        fprintf ppf "let %s = %a%a in %a"
+    | LetExp (_, x, u, tvs, e1, e2) as e ->
+        fprintf ppf "let %s:%a = %a%a in %a"
           x
+          pp_ty u
           pp_let_tyabses tvs
           (with_paren (gt_exp e e1) pp_exp) e1
           (with_paren (gte_exp e e2) pp_exp) e2
 
   let pp_program ppf = function
     | Exp e -> pp_exp ppf e
-    | LetDecl (x, tvs, e) ->
-      fprintf ppf "let %s = %a%a"
+    | LetDecl (x, u, tvs, e) ->
+      fprintf ppf "let %s:%a = %a%a"
         x
+        pp_ty u
         pp_let_tyabses tvs
         pp_exp e
 

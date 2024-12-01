@@ -233,7 +233,7 @@ module KNorm = struct
     | FixExp of range * id * id * ty * ty * exp
     | AppExp of range * k_id * k_id
     | CastExp of range * k_id * ty * ty * polarity
-    | LetExp of range * id * tyvar list * exp * exp
+    | LetExp of range * id * ty * tyvar list * exp * exp
 
   let range_of_exp = function
     | Var (r, _)
@@ -246,41 +246,11 @@ module KNorm = struct
     | FixExp (r, _, _, _, _, _)
     | AppExp (r, _, _)
     | CastExp (r, _, _, _, _)
-    | LetExp (r, _, _, _, _) -> r
-
-  (*let rec is_value = function
-    | IConst _
-    | BConst _
-    | UConst _
-    | FunExp _
-    | FixExp _-> true
-    | CastExp (_, v, TyFun _, TyFun _, _) when is_value v -> true
-    | CastExp (_, v, g, TyDyn, _) when is_value v && is_ground g -> true
-    | _ -> false
-
-  let ftv_tyarg = function
-    | Ty ty -> ftv_ty ty
-    | TyNu -> TV.empty
-
-  let rec ftv_exp: exp -> TV.t = function
-    | Var (_, _, us) -> List.fold_right TV.union (List.map ftv_tyarg us) TV.empty
-    | IConst _
-    | BConst _
-    | UConst _ -> TV.empty
-    | BinOp (_, _, f1, f2) -> TV.union (ftv_exp f1) (ftv_exp f2)
-    | IfExp (_, f1, f2, f3) ->
-      List.fold_right TV.union (List.map ftv_exp [f1; f2; f3]) TV.empty
-    | FunExp (_, _, u, e) -> TV.union (ftv_ty u) (ftv_exp e)
-    | FixExp (_, _, _, u1, _, f) -> TV.union (ftv_ty u1) (ftv_exp f)
-    | AppExp (_, f1, f2) -> TV.union (ftv_exp f1) (ftv_exp f2)
-    | CastExp (_, f, u1, u2, _) ->
-      TV.union (ftv_exp f) @@ TV.union (ftv_ty u1) (ftv_ty u2)
-    | LetExp (_, _, xs, f1, f2) ->
-      TV.union (TV.diff (ftv_exp f1) (TV.of_list xs)) (ftv_exp f2)*)
+    | LetExp (r, _, _, _, _, _) -> r
 
   type program =
     | Exp of exp
-    | LetDecl of id * tyvar list * exp
+    | LetDecl of id * ty * tyvar list * exp
 
   type tag = I | B | U | Ar
 

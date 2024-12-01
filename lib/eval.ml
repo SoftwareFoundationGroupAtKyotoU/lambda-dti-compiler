@@ -209,9 +209,9 @@ module KNorm = struct
     | FixExp (r, x, y, u1, u2, e) -> FixExp (r, x, y, subst_type s u1, subst_type s u2, subst_exp s e)
     | AppExp (r, kid1, kid2) -> AppExp (r, subst s kid1, subst s kid2)
     | CastExp (r, kid, u1, u2, p) -> CastExp (r, subst s kid, subst_type s u1, subst_type s u2, p)
-    | LetExp (r, x, ts, f1, f2) ->
-      let s = List.filter (fun (x, _) -> not @@ List.memq x ts) s in
-      LetExp (r, x, ts, subst_exp s f1, subst_exp s f2)
+    | LetExp (r, x, u, tvs, f1, f2) ->
+      let s = List.filter (fun (x, _) -> not @@ List.memq x tvs) s in
+      LetExp (r, x, u, tvs, subst_exp s f1, subst_exp s f2)
 
   let eval_binop op v1 v2 = match op, v1, v2 with
     | Plus, IntV i1, IntV i2 -> IntV (i1 + i2)
@@ -284,7 +284,7 @@ module KNorm = struct
     | CastExp (r, (x, _), u1, u2, p) ->
       let _, v = Environment.find x kenv in
       cast ~debug:debug v u1 u2 r p
-    | LetExp (_, x, tvs, f1, f2) -> 
+    | LetExp (_, x, _, tvs, f1, f2) -> 
       let v1 = eval_exp kenv f1 in
       eval_exp (Environment.add x (tvs, v1) kenv) f2
   and cast ?(debug=false) v u1 u2 r p = 
@@ -360,7 +360,7 @@ module KNorm = struct
 
   let eval_program ?(debug=false) kenv = function
     | Exp f -> let v = eval_exp kenv f ~debug:debug in kenv, "-", v
-    | LetDecl (x, tvs, f) ->
+    | LetDecl (x, _, tvs, f) ->
       let v = eval_exp kenv f ~debug:debug in
       let kenv = Environment.add x (tvs, v) kenv in
       kenv, x, v
