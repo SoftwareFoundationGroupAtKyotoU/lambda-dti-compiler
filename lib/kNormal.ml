@@ -262,6 +262,8 @@ module KNorm = struct
     | LetExp (r, x, u, tvs, f1, f2) ->
       let rec insert = function
         | LetExp (r', x', u', tvs', f3, f4) -> LetExp (r', x', u', tvs', f3, insert f4)
+        | LetFunExp (r', x', u', tvs', args, f3, f4) -> LetFunExp (r', x', u', tvs', args, f3, insert f4)
+        | LetFixExp (r', x', u', tvs', args, f3, f4) -> LetFixExp (r', x', u', tvs', args, f3, insert f4)
         | f1 -> LetExp (r, x, u, tvs, f1, assoc_exp f2)
       in insert (assoc_exp f1)
     | LetFunExp (r, x, u, tvs, args, f1, f2) ->
