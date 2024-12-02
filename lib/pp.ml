@@ -310,18 +310,24 @@ module KNorm = struct
     else
       let pp_sep ppf () = fprintf ppf "," in
       let pp_list ppf types = pp_print_list pp_ty ppf types ~pp_sep:pp_sep in
-      fprintf ppf "fun %a -> "
+      fprintf ppf "Λ%a. "
         pp_list @@ List.map (fun x -> TyVar x) tvs
+
+  let pp_fun_args ppf args = 
+    let pp_sep ppf () = fprintf ppf " -> fun " in
+    let pp_id_ty ppf (x, ty) = fprintf ppf "(%s:%a)" x pp_ty ty in
+    let pp_list ppf args = pp_print_list pp_id_ty ppf args ~pp_sep:pp_sep in
+    fprintf ppf "fun %a ->" pp_list args
 
   let gt_exp e e1 = match e, e1 with
     | (Var _ | IConst _ | UConst _), _ -> raise @@ Syntax_error(* "gt_exp: value-exp was given as e"*)
     | (BinOp _ | AppExp _), _ -> raise @@ Syntax_error(* "gt_exp : expression not contain exp was given as e"*)
-    | (IfEqExp _ | IfLteExp _), (FunExp _ | LetExp _) -> true
+    | (IfEqExp _ | IfLteExp _), (LetExp _ | LetFunExp _ | LetFixExp _) -> true
     | _ -> false
   
   let gte_exp e e1 = match e, e1 with
     | BinOp (_, op, _ , _), BinOp (_, op1, _, _) when op = op1 -> true
-    | FunExp _, FunExp _ | AppExp _, AppExp _ | LetExp _ , LetExp _ -> true
+    | AppExp _, AppExp _ | (LetExp _ | LetFunExp _ | LetFixExp _) , (LetExp _ | LetFunExp _ | LetFixExp _) -> true
     | (IfEqExp _ | IfLteExp _), (IfEqExp _ | IfLteExp _) -> true
     | _ -> gt_exp e e1
 
@@ -346,7 +352,7 @@ module KNorm = struct
         pp_print_k_id k_y
         pp_exp e1
         pp_exp e2
-    | FunExp (_, x, u, e) ->
+    (*| FunExp (_, x, u, e) ->
       fprintf ppf "fun (%s:%a) -> %a"
         x
         pp_ty u
@@ -357,7 +363,7 @@ module KNorm = struct
         y
         pp_ty u1
         pp_ty u2
-        pp_exp e
+        pp_exp e*)
     | AppExp (_, k_x1, k_x2) -> 
       fprintf ppf "%a %a"
         pp_print_k_id k_x1
@@ -368,21 +374,51 @@ module KNorm = struct
           pp_ty u1
           pp_ty u2
     | LetExp (_, x, u, tvs, e1, e2) as e ->
-        fprintf ppf "let %s:%a = %a%a in %a"
+        fprintf ppf "let (%s:%a) = %a%a in %a"
           x
           pp_ty u
           pp_let_tyabses tvs
+          (with_paren (gt_exp e e1) pp_exp) e1
+          (with_paren (gte_exp e e2) pp_exp) e2
+    | LetFunExp (_, x, u, tvs, args, e1, e2) as e ->
+        fprintf ppf "let (%s:%a) = %a%a %a in %a"
+          x
+          pp_ty u
+          pp_let_tyabses tvs
+          pp_fun_args args
+          (with_paren (gt_exp e e1) pp_exp) e1
+          (with_paren (gte_exp e e2) pp_exp) e2
+    | LetFixExp (_, x, u, tvs, args, e1, e2) as e ->
+        fprintf ppf "let rec (%s:%a) = %a%a %a in %a"
+          x
+          pp_ty u
+          pp_let_tyabses tvs
+          pp_fun_args args
           (with_paren (gt_exp e e1) pp_exp) e1
           (with_paren (gte_exp e e2) pp_exp) e2
 
   let pp_program ppf = function
     | Exp e -> pp_exp ppf e
     | LetDecl (x, u, tvs, e) ->
-      fprintf ppf "let %s:%a = %a%a"
+      fprintf ppf "let (%s:%a) = %a%a"
         x
         pp_ty u
         pp_let_tyabses tvs
         pp_exp e
+    | LetFunDecl (x, u, tvs, args, e) ->
+        fprintf ppf "let (%s:%a) = %a%a %a"
+          x
+          pp_ty u
+          pp_let_tyabses tvs
+          pp_fun_args args
+          pp_exp e
+    | LetFixDecl (x, u, tvs, args, e) ->
+        fprintf ppf "let rec (%s:%a) = %a%a %a"
+          x
+          pp_ty u
+          pp_let_tyabses tvs
+          pp_fun_args args
+          pp_exp e
 
   let pp_tag ppf t = pp_ty ppf @@ tag_to_ty t
 

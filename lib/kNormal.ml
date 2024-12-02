@@ -50,12 +50,10 @@ module CC = struct
       let u = Typing.meet u2 u3 in
       if op_b then insert_let fu11 (fun x -> (insert_let fu12 (fun y -> KNorm.IfEqExp (r, x, y, former, later), u)))
       else insert_let fu11 (fun x -> (insert_let fu12 (fun y -> KNorm.IfLteExp (r, x, y, former, later), u)))
-    | FunExp (r, x, u, f) -> 
-      let f', u' = k_normalize_exp (Environment.add x (TyScheme ([], u)) tyenv) f in
-      KNorm.FunExp (r, x, u, f'), TyFun (u, u')
-    | FixExp (r, x, y, u1, u2, f) ->
-      let f', u' = k_normalize_exp (Environment.add y (TyScheme ([], u1)) (Environment.add x (TyScheme ([], TyFun (u1, u2))) tyenv)) f in
-      KNorm.FixExp (r, x, y, u1, u2, f'), TyFun (u1, u')
+    | FunExp (r, _, _, _) as f -> 
+      let tent_var = genvar () in
+      k_normalize_exp tyenv (LetExp (r, tent_var, [], f, Var (r, tent_var, [])))
+    | FixExp _ -> raise @@ KNormal_bug "FixExp should appear in let"
     | AppExp (r, f1, f2) ->
       let _, u1 as fu1 = k_normalize_exp tyenv f1 in 
       let fu2 = k_normalize_exp tyenv f2 in
@@ -68,9 +66,35 @@ module CC = struct
       let fu = k_normalize_exp tyenv f in
       insert_let fu (fun x -> KNorm.CastExp (r, x, u1, u2, p), u2)
     | LetExp (r, x, tvs, f1, f2) -> 
-      let f1', u1 = k_normalize_exp tyenv f1 in
-      let f2', u2 = k_normalize_exp (Environment.add x (TyScheme (tvs, u1)) tyenv) f2 in
-      KNorm.LetExp (r, x, u1, tvs, f1', f2'), u2
+      let rec pickup_fun f l = match f with
+        | FunExp (_, x, u, f) -> pickup_fun f ((x, u)::l)
+        | _ -> f, List.rev l
+      in begin match f1 with
+        | FunExp _ as f1 ->
+          let f1, args = pickup_fun f1 [] in
+          let f1, u1 = k_normalize_exp (List.fold_left (fun tyenv -> fun (x, u) -> Environment.add x (TyScheme ([], u)) tyenv) tyenv args) f1 in
+          let rec args_to_ty args u1 = match args with
+            | (_, u) :: t -> TyFun (u, args_to_ty t u1)
+            | [] -> u1
+          in let u1 = args_to_ty args u1 in
+          let f2, u2 = k_normalize_exp (Environment.add x (TyScheme (tvs, u1)) tyenv) f2 in
+          KNorm.LetFunExp (r, x, u1, tvs, args, f1, f2), u2
+        | FixExp (r, x', y, u1', u2', f) ->
+          assert (x' = x);
+          let f, args = pickup_fun f [] in
+          let args = (y, u1') :: args in
+          let f1, u1 = k_normalize_exp (List.fold_left (fun tyenv -> fun (x, u) -> Environment.add x (TyScheme ([], u)) tyenv) (Environment.add x' (TyScheme ([], TyFun (u1', u2'))) tyenv) args) f in
+          let rec args_to_ty args u1 = match args with
+            | (_, u) :: t -> TyFun (u, args_to_ty t u1)
+            | [] -> u1
+          in let u1 = args_to_ty args u1 in
+          let f2, u2 = k_normalize_exp (Environment.add x (TyScheme (tvs, u1)) tyenv) f2 in
+          KNorm.LetFixExp (r, x, u1, tvs, args, f1, f2), u2
+        | _ as f ->
+          let f1, u1 = k_normalize_exp tyenv f in
+          let f2, u2 = k_normalize_exp (Environment.add x (TyScheme (tvs, u1)) tyenv) f2 in
+          KNorm.LetExp (r, x, u1, tvs, f1, f2), u2
+      end
   and cond_if tyenv = function
     | BinOp (r, op, f1, f2) -> 
       let fu1 = k_normalize_exp tyenv f1 in
@@ -91,7 +115,32 @@ module CC = struct
 
   let k_normalize_program tyenv = function
     | Exp f -> let f, u = k_normalize_exp tyenv f in KNorm.Exp f, u
-    | LetDecl (x, tvs, f) -> let f, u = k_normalize_exp tyenv f in KNorm.LetDecl (x, u, tvs, f), u
+    | LetDecl (x, tvs, f) -> 
+      let rec pickup_fun f l = match f with
+        | FunExp (_, x, u, f) -> pickup_fun f ((x, u)::l)
+        | _ -> f, List.rev l
+      in begin match f with
+        | FunExp _ as f ->
+          let f, args = pickup_fun f [] in
+          let f, u = k_normalize_exp (List.fold_left (fun tyenv -> fun (x, u) -> Environment.add x (TyScheme ([], u)) tyenv) tyenv args) f in
+          let rec args_to_ty args u = match args with
+            | (_, u') :: t -> TyFun (u', args_to_ty t u)
+            | [] -> u
+          in let u = args_to_ty args u in
+          KNorm.LetFunDecl (x, u, tvs, args, f), u
+        | FixExp (_, x', y, u1', u2', f) ->
+          assert (x' = x);
+          let f, args = pickup_fun f [] in
+          let args = (y, u1') :: args in
+          let f, u = k_normalize_exp (List.fold_left (fun tyenv -> fun (x, u) -> Environment.add x (TyScheme ([], u)) tyenv) (Environment.add x' (TyScheme ([], TyFun (u1', u2'))) tyenv) args) f in
+          let rec args_to_ty args u = match args with
+            | (_, u) :: t -> TyFun (u, args_to_ty t u)
+            | [] -> u
+          in let u = args_to_ty args u in
+          KNorm.LetFixDecl (x, u, tvs, args, f), u
+        | _ as f ->
+          let f, u = k_normalize_exp tyenv f in KNorm.LetDecl (x, u, tvs, f), u
+      end
 end
 
 module KNorm = struct
@@ -110,25 +159,55 @@ module KNorm = struct
       IfEqExp (r, find kid1 idenv, find kid2 idenv, alpha_exp idenv f1, alpha_exp idenv f2)
     | IfLteExp (r, kid1, kid2, f1, f2) ->
       IfLteExp (r, find kid1 idenv, find kid2 idenv, alpha_exp idenv f1, alpha_exp idenv f2)
-    | FunExp (r, x, u, f) -> 
+    (*| FunExp (r, x, u, f) -> 
       let newx = create_id x idenv in
       FunExp (r, newx, u, alpha_exp (Environment.add x newx idenv) f)
     | FixExp (r, x, y, u1, u2, f) ->
       let newx = create_id x idenv in
       let newy = create_id y (Environment.add x newx idenv) in
-      FixExp (r, newx, newy, u1, u2, alpha_exp (Environment.add y newy @@ Environment.add x newx idenv) f)
+      FixExp (r, newx, newy, u1, u2, alpha_exp (Environment.add y newy @@ Environment.add x newx idenv) f)*)
     | AppExp (r, kid1, kid2) -> AppExp (r, find kid1 idenv, find kid2 idenv)
     | CastExp (r, kid, u1, u2, p) ->
       CastExp (r, find kid idenv, u1, u2, p)
     | LetExp (r, x, u, tvs, f1, f2) -> 
       let newx = create_id x idenv in
       LetExp (r, newx, u, tvs, alpha_exp idenv f1, alpha_exp (Environment.add x newx idenv) f2)
+    | LetFunExp (r, x, u, tvs, args, f1, f2) ->
+      let newx = create_id x idenv in
+      let rec newargs args l idenv = match args with
+        | (x, u) :: t -> let newx = create_id x idenv in newargs t ((newx, u)::l) (Environment.add x newx idenv)
+        | [] -> List.rev l, idenv
+      in let newargs, idenv' = newargs args [] idenv in
+      LetFunExp (r, newx, u, tvs, newargs, alpha_exp idenv' f1, alpha_exp (Environment.add x newx idenv) f2)
+    | LetFixExp (r, x, u, tvs, args, f1, f2) ->
+      let newx = create_id x idenv in
+      let idenv = Environment.add x newx idenv in
+      let rec newargs args l idenv = match args with
+        | (x, u) :: t -> let newx = create_id x idenv in newargs t ((newx, u)::l) (Environment.add x newx idenv)
+        | [] -> List.rev l, idenv
+      in let newargs, idenv' = newargs args [] idenv in
+      LetFixExp (r, newx, u, tvs, newargs, alpha_exp idenv' f1, alpha_exp idenv f2)
 
   let alpha_program idenv = function
     | Exp f -> Exp (alpha_exp idenv f), idenv
     | LetDecl (x, u, tvs, f) -> 
       let newx = create_id x idenv in
       LetDecl (newx, u, tvs, alpha_exp idenv f), Environment.add x newx idenv
+    | LetFunDecl (x, u, tvs, args, f) ->
+      let newx = create_id x idenv in
+      let rec newargs args l idenv = match args with
+        | (x, u) :: t -> let newx = create_id x idenv in newargs t ((newx, u)::l) (Environment.add x newx idenv)
+        | [] -> List.rev l, idenv
+      in let newargs, idenv' = newargs args [] idenv in
+      LetFunDecl (newx, u, tvs, newargs, alpha_exp idenv' f), Environment.add x newx idenv
+    | LetFixDecl (x, u, tvs, args, f) ->
+      let newx = create_id x idenv in
+      let idenv = Environment.add x newx idenv in
+      let rec newargs args l idenv = match args with
+        | (x, u) :: t -> let newx = create_id x idenv in newargs t ((newx, u)::l) (Environment.add x newx idenv)
+        | [] -> List.rev l, idenv
+      in let newargs, idenv' = newargs args [] idenv in
+      LetFixDecl (newx, u, tvs, newargs, alpha_exp idenv' f), Environment.add x newx idenv
 
   (* beta : let x = y in ... となっているようなxをyに置き換える *)
   let rec beta_exp idenv = function
@@ -139,8 +218,8 @@ module KNorm = struct
       IfEqExp (r, find kid1 idenv, find kid2 idenv, beta_exp idenv f1, beta_exp idenv f2)
     | IfLteExp (r, kid1, kid2, f1, f2) ->
       IfLteExp (r, find kid1 idenv, find kid2 idenv, beta_exp idenv f1, beta_exp idenv f2)
-    | FunExp (r, x, u, f) -> FunExp (r, x, u, beta_exp idenv f)
-    | FixExp (r, x, y, u1, u2, f) -> FixExp (r, x, y, u1, u2, beta_exp idenv f)
+    (*| FunExp (r, x, u, f) -> FunExp (r, x, u, beta_exp idenv f)
+    | FixExp (r, x, y, u1, u2, f) -> FixExp (r, x, y, u1, u2, beta_exp idenv f)*)
     | AppExp (r, kid1, kid2) -> AppExp (r, find kid1 idenv, find kid2 idenv)
     | CastExp (r, kid, u1, u2, p) -> CastExp (r, find kid idenv, u1, u2, p)
     | LetExp (r, x, u, tvs, f1, f2) ->
@@ -149,6 +228,10 @@ module KNorm = struct
         | Var (_, (x', _)) -> beta_exp (Environment.add x x' idenv) f2
         | f1 -> LetExp (r, x, u, tvs, f1, beta_exp idenv f2)
       end
+    | LetFunExp (r, x, u, tvs, args, f1, f2) ->
+      LetFunExp (r, x, u, tvs, args, beta_exp idenv f1, beta_exp idenv f2)
+    | LetFixExp (r, x, u, tvs, args, f1, f2) ->
+      LetFixExp (r, x, u, tvs, args, beta_exp idenv f1, beta_exp idenv f2)
 
   let beta_program idenv = function
     | Exp f -> Exp (beta_exp idenv f), idenv
@@ -158,23 +241,35 @@ module KNorm = struct
       | Var (_, (x', _)) as f -> Exp f, Environment.add x x' idenv
       | f -> LetDecl (x, u, tvs, f), idenv
       end
+    | LetFunDecl (x, u, tvs, args, f) ->
+      LetFunDecl (x, u, tvs, args, beta_exp idenv f), idenv
+    | LetFixDecl (x, u, tvs, args, f) ->
+      LetFixDecl (x, u, tvs, args, beta_exp idenv f), idenv
 
   (* assoc : let x = (let y = ... in ... ) in ...というようなネストされたletをlet y = ... in let x = ... in ...という形に平たくする *)
   let rec assoc_exp = function
     | IfEqExp (r, x, y, f1, f2) -> IfEqExp (r, x, y, assoc_exp f1, assoc_exp f2)
     | IfLteExp (r, x, y, f1, f2) -> IfLteExp (r, x, y, assoc_exp f1, assoc_exp f2)
-    | FunExp (r, x, u, f) -> FunExp (r, x, u, assoc_exp f)
-    | FixExp (r, x, y, u1, u2, f) -> FixExp (r, x, y, u1, u2, assoc_exp f)
+    (*| FunExp (r, x, u, f) -> FunExp (r, x, u, assoc_exp f)
+    | FixExp (r, x, y, u1, u2, f) -> FixExp (r, x, y, u1, u2, assoc_exp f)*)
     | LetExp (r, x, u, tvs, f1, f2) ->
       let rec insert = function
         | LetExp (r', x', u', tvs', f3, f4) -> LetExp (r', x', u', tvs', f3, insert f4)
         | f1 -> LetExp (r, x, u, tvs, f1, assoc_exp f2)
       in insert (assoc_exp f1)
+    | LetFunExp (r, x, u, tvs, args, f1, f2) ->
+      LetFunExp (r, x, u, tvs, args, assoc_exp f1, assoc_exp f2)
+    | LetFixExp (r, x, u, tvs, args, f1, f2) ->
+      LetFixExp (r, x, u, tvs, args, assoc_exp f1, assoc_exp f2)
     | f -> f
   
   let assoc_program = function
     | Exp f -> Exp (assoc_exp f)
     | LetDecl (x, u, tvs, f) -> LetDecl (x, u, tvs, assoc_exp f)
+    | LetFunDecl (x, u, tvs, args, f) ->
+      LetFunDecl (x, u, tvs, args, assoc_exp f)
+    | LetFixDecl (x, u, tvs, args, f) ->
+      LetFixDecl (x, u, tvs, args, assoc_exp f)
 end
 
 let kNorm_funs ?(debug=false) tyenv (alphaenv, betaenv) f = 

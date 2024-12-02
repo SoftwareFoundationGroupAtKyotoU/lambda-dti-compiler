@@ -229,11 +229,13 @@ module KNorm = struct
     | BinOp of range * binop * k_id * k_id
     | IfEqExp of range * k_id * k_id * exp * exp
     | IfLteExp of range * k_id * k_id * exp * exp
-    | FunExp of range * id * ty * exp
-    | FixExp of range * id * id * ty * ty * exp
+    (*| FunExp of range * id * ty * exp
+    | FixExp of range * id * id * ty * ty * exp*)
     | AppExp of range * k_id * k_id
     | CastExp of range * k_id * ty * ty * polarity
     | LetExp of range * id * ty * tyvar list * exp * exp
+    | LetFunExp of range * id * ty * tyvar list * (id * ty) list * exp * exp
+    | LetFixExp of range * id * ty * tyvar list * (id * ty) list * exp * exp
 
   let range_of_exp = function
     | Var (r, _)
@@ -242,15 +244,19 @@ module KNorm = struct
     | BinOp (r, _, _, _)
     | IfEqExp (r, _, _, _, _)
     | IfLteExp (r, _, _, _, _)
-    | FunExp (r, _, _, _)
-    | FixExp (r, _, _, _, _, _)
+    (*| FunExp (r, _, _, _)
+    | FixExp (r, _, _, _, _, _)*)
     | AppExp (r, _, _)
     | CastExp (r, _, _, _, _)
-    | LetExp (r, _, _, _, _, _) -> r
+    | LetExp (r, _, _, _, _, _)
+    | LetFunExp (r, _, _, _, _, _, _)
+    | LetFixExp (r, _, _, _, _, _, _) -> r
 
   type program =
     | Exp of exp
     | LetDecl of id * ty * tyvar list * exp
+    | LetFunDecl of id * ty * tyvar list * (id * ty) list * exp
+    | LetFixDecl of id * ty * tyvar list * (id * ty) list * exp
 
   type tag = I | B | U | Ar
 
