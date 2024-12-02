@@ -373,6 +373,11 @@ module KNorm = struct
           pp_print_k_id k_x
           pp_ty u1
           pp_ty u2
+    (*| CastExp (_, e, u1, u2, _) ->
+        fprintf ppf "(%a): %a => %a"
+          pp_exp e
+          pp_ty u1
+          pp_ty u2*)
     | LetExp (_, x, u, tvs, e1, e2) as e ->
         fprintf ppf "let (%s:%a) = %a%a in %a"
           x

@@ -209,6 +209,7 @@ module KNorm = struct
     | FixExp (r, x, y, u1, u2, e) -> FixExp (r, x, y, subst_type s u1, subst_type s u2, subst_exp s e)*)
     | AppExp (r, kid1, kid2) -> AppExp (r, subst s kid1, subst s kid2)
     | CastExp (r, kid, u1, u2, p) -> CastExp (r, subst s kid, subst_type s u1, subst_type s u2, p)
+    (*| CastExp (r, f, u1, u2, p) -> CastExp (r, subst_exp s f, subst_type s u1, subst_type s u2, p)*)
     | LetExp (r, x, u, tvs, f1, f2) ->
       let s = List.filter (fun (x, _) -> not @@ List.memq x tvs) s in
       LetExp (r, x, subst_type s u, tvs, subst_exp s f1, subst_exp s f2)
@@ -290,6 +291,9 @@ module KNorm = struct
     | CastExp (r, (x, _), u1, u2, p) ->
       let _, v = Environment.find x kenv in
       cast ~debug:debug v u1 u2 r p
+    (*| CastExp (r, f, u1, u2, p) ->
+      let v = eval_exp kenv f in
+      cast ~debug:debug v u1 u2 r p*)
     | LetExp (_, x, _, tvs, f1, f2) -> 
       let v1 = eval_exp kenv f1 in
       eval_exp (Environment.add x (tvs, v1) kenv) f2

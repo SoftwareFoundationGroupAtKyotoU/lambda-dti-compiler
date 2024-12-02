@@ -65,6 +65,9 @@ module CC = struct
     | CastExp (r, f, u1, u2, p) ->
       let fu = k_normalize_exp tyenv f in
       insert_let fu (fun x -> KNorm.CastExp (r, x, u1, u2, p), u2)
+    (*| CastExp (r, f, u1, u2, p) ->
+      let f, _ = k_normalize_exp tyenv f in
+      CastExp (r, f, u1, u2, p), u2*)
     | LetExp (r, x, tvs, f1, f2) -> 
       let rec pickup_fun f l = match f with
         | FunExp (_, x, u, f) -> pickup_fun f ((x, u)::l)
@@ -169,6 +172,8 @@ module KNorm = struct
     | AppExp (r, kid1, kid2) -> AppExp (r, find kid1 idenv, find kid2 idenv)
     | CastExp (r, kid, u1, u2, p) ->
       CastExp (r, find kid idenv, u1, u2, p)
+    (*| CastExp (r, f, u1, u2, p) ->
+      CastExp (r, alpha_exp idenv f, u1, u2, p)*)
     | LetExp (r, x, u, tvs, f1, f2) -> 
       let newx = create_id x idenv in
       LetExp (r, newx, u, tvs, alpha_exp idenv f1, alpha_exp (Environment.add x newx idenv) f2)
@@ -222,6 +227,7 @@ module KNorm = struct
     | FixExp (r, x, y, u1, u2, f) -> FixExp (r, x, y, u1, u2, beta_exp idenv f)*)
     | AppExp (r, kid1, kid2) -> AppExp (r, find kid1 idenv, find kid2 idenv)
     | CastExp (r, kid, u1, u2, p) -> CastExp (r, find kid idenv, u1, u2, p)
+    (*| CastExp (r, f, u1, u2, p) -> CastExp (r, beta_exp idenv f, u1, u2, p)*)
     | LetExp (r, x, u, tvs, f1, f2) ->
       let f1 = beta_exp idenv f1 in
       begin match f1 with
@@ -252,6 +258,7 @@ module KNorm = struct
     | IfLteExp (r, x, y, f1, f2) -> IfLteExp (r, x, y, assoc_exp f1, assoc_exp f2)
     (*| FunExp (r, x, u, f) -> FunExp (r, x, u, assoc_exp f)
     | FixExp (r, x, y, u1, u2, f) -> FixExp (r, x, y, u1, u2, assoc_exp f)*)
+    (*| CastExp (r, f, u1, u2, p) -> CastExp (r, assoc_exp f, u1, u2, p)*)
     | LetExp (r, x, u, tvs, f1, f2) ->
       let rec insert = function
         | LetExp (r', x', u', tvs', f3, f4) -> LetExp (r', x', u', tvs', f3, insert f4)

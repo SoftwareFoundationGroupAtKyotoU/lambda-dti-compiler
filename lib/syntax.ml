@@ -233,6 +233,7 @@ module KNorm = struct
     | FixExp of range * id * id * ty * ty * exp*)
     | AppExp of range * k_id * k_id
     | CastExp of range * k_id * ty * ty * polarity
+    (*| CastExp of range * exp * ty * ty * polarity*)
     | LetExp of range * id * ty * tyvar list * exp * exp
     | LetFunExp of range * id * ty * tyvar list * (id * ty) list * exp * exp
     | LetFixExp of range * id * ty * tyvar list * (id * ty) list * exp * exp
