@@ -43,12 +43,12 @@ let rec read_eval_print lexbuf env tyenv kfunenvs kenv =
       assert (Typing.is_equal u ku);
 
       (* Evaluation *)
-      print_debug "***** Eval *****\n";
+      (*print_debug "***** Eval *****\n";
       let env, x, v = Eval.CC.eval_program env f ~debug:!debug in
       print_debug "original :: %a : %a = %a\n"
         pp_print_string x
         Pp.pp_ty2 u
-        Pp.CC.pp_value v;
+        Pp.CC.pp_value v;*)
 
       (* Evaluation on kNormalized term *)
       let kenv, kx, kv = Eval.KNorm.eval_program kenv kf ~debug:!debug in
