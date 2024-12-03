@@ -223,33 +223,17 @@ module KNorm = struct
   type k_id = id * tyarg list
 
   type exp =
-    | Var of range * k_id
-    | IConst of range * int
-    | UConst of range
-    | BinOp of range * binop * k_id * k_id
-    | IfEqExp of range * k_id * k_id * exp * exp
-    | IfLteExp of range * k_id * k_id * exp * exp
-    (*| FunExp of range * id * ty * exp
-    | FixExp of range * id * id * ty * ty * exp*)
-    | AppExp of range * k_id * k_id
+    | Var of k_id
+    | IConst of int
+    | UConst
+    | BinOp of binop * k_id * k_id
+    | IfEqExp of k_id * k_id * exp * exp
+    | IfLteExp of k_id * k_id * exp * exp
+    | AppExp of k_id * k_id
     | CastExp of range * k_id * ty * ty * polarity
     (*| CastExp of range * exp * ty * ty * polarity*)
-    | LetExp of range * id * ty * tyvar list * exp * exp
-    | LetRecExp of range * id * ty * tyvar list * (id * ty) * exp * exp
-
-  let range_of_exp = function
-    | Var (r, _)
-    | IConst (r, _)
-    | UConst r
-    | BinOp (r, _, _, _)
-    | IfEqExp (r, _, _, _, _)
-    | IfLteExp (r, _, _, _, _)
-    (*| FunExp (r, _, _, _)
-    | FixExp (r, _, _, _, _, _)*)
-    | AppExp (r, _, _)
-    | CastExp (r, _, _, _, _)
-    | LetExp (r, _, _, _, _, _)
-    | LetRecExp (r, _, _, _, _, _, _) -> r
+    | LetExp of id * ty * tyvar list * exp * exp
+    | LetRecExp of id * ty * tyvar list * (id * ty) * exp * exp
 
   type program =
     | Exp of exp

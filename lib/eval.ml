@@ -200,22 +200,20 @@ module KNorm = struct
       | Ty u -> Ty (subst_type s u)
       | TyNu -> TyNu
     in let subst s (x, tas) = (x, List.map (subst_type_k s) tas) in function
-    | Var (r, kid) -> Var (r, subst s kid)
-    | IConst _ | UConst _ as f -> f
-    | BinOp (r, op, kid1, kid2) -> BinOp (r, op, subst s kid1, subst s kid2)
-    | IfEqExp (r, kid1, kid2, f1, f2) -> IfEqExp (r, subst s kid1, subst s kid2, subst_exp s f1, subst_exp s f2)
-    | IfLteExp (r, kid1, kid2, f1, f2) -> IfLteExp (r, subst s kid1, subst s kid2, subst_exp s f1, subst_exp s f2)
-    (*| FunExp (r, x, u, f) -> FunExp (r, x, subst_type s u, subst_exp s f)
-    | FixExp (r, x, y, u1, u2, e) -> FixExp (r, x, y, subst_type s u1, subst_type s u2, subst_exp s e)*)
-    | AppExp (r, kid1, kid2) -> AppExp (r, subst s kid1, subst s kid2)
+    | Var kid -> Var (subst s kid)
+    | IConst _ | UConst as f -> f
+    | BinOp (op, kid1, kid2) -> BinOp (op, subst s kid1, subst s kid2)
+    | IfEqExp (kid1, kid2, f1, f2) -> IfEqExp (subst s kid1, subst s kid2, subst_exp s f1, subst_exp s f2)
+    | IfLteExp (kid1, kid2, f1, f2) -> IfLteExp (subst s kid1, subst s kid2, subst_exp s f1, subst_exp s f2)
+    | AppExp (kid1, kid2) -> AppExp (subst s kid1, subst s kid2)
     | CastExp (r, kid, u1, u2, p) -> CastExp (r, subst s kid, subst_type s u1, subst_type s u2, p)
     (*| CastExp (r, f, u1, u2, p) -> CastExp (r, subst_exp s f, subst_type s u1, subst_type s u2, p)*)
-    | LetExp (r, x, u, tvs, f1, f2) ->
+    | LetExp (x, u, tvs, f1, f2) ->
       let s = List.filter (fun (x, _) -> not @@ List.memq x tvs) s in
-      LetExp (r, x, subst_type s u, tvs, subst_exp s f1, subst_exp s f2)
-    | LetRecExp (r, x, u, tvs, arg, f1, f2) ->
+      LetExp (x, subst_type s u, tvs, subst_exp s f1, subst_exp s f2)
+    | LetRecExp (x, u, tvs, arg, f1, f2) ->
       let s = List.filter (fun (x, _) -> not @@ List.memq x tvs) s in
-      LetRecExp (r, x, subst_type s u, tvs, (fun (x, u) -> (x, subst_type s u)) arg, subst_exp s f1, subst_exp s f2)
+      LetRecExp (x, subst_type s u, tvs, (fun (x, u) -> (x, subst_type s u)) arg, subst_exp s f1, subst_exp s f2)
 
   let eval_binop op v1 v2 = match op, v1, v2 with
     | Plus, IntV i1, IntV i2 -> IntV (i1 + i2)
@@ -235,49 +233,34 @@ module KNorm = struct
     if debug then fprintf err_formatter "keval <-- %a\n" Pp.KNorm.pp_exp f;
     let eval_exp = eval_exp ~debug:debug in
     match f with
-    | Var (_, (x, tas)) -> 
+    | Var (x, tas) -> 
       let tvs, v = Environment.find x kenv in
       let us = List.map nu_to_fresh tas in
       begin match v with
         | FunV proc -> FunV (fun _ -> proc (tvs, us))
         | _ -> v
       end
-    | IConst (_, i) -> IntV i
-    | UConst _ -> UnitV
-    | BinOp (_, op, (x1, _), (x2, _)) ->
+    | IConst i -> IntV i
+    | UConst -> UnitV
+    | BinOp (op, (x1, _), (x2, _)) ->
       let _, v1 = Environment.find x1 kenv in
       let _, v2 = Environment.find x2 kenv in
       eval_binop op v1 v2
-    | IfEqExp (_, (x1, _), (x2, _), f2, f3) ->
+    | IfEqExp ((x1, _), (x2, _), f2, f3) ->
       let _, v1 = Environment.find x1 kenv in
       let _, v2 = Environment.find x2 kenv in
       begin match v1, v2 with
         | IntV i1, IntV i2 -> if i1 = i2 then eval_exp kenv f2 else eval_exp kenv f3
         | _ -> raise @@ Eval_bug "IfEqExp: not int value"
       end
-    | IfLteExp (_, (x1, _), (x2, _), f2, f3) ->
+    | IfLteExp ((x1, _), (x2, _), f2, f3) ->
       let _, v1 = Environment.find x1 kenv in
       let _, v2 = Environment.find x2 kenv in
       begin match v1, v2 with
         | IntV i1, IntV i2 -> if i1 <= i2 then eval_exp kenv f2 else eval_exp kenv f3
         | _ -> raise @@ Eval_bug "IfLteExp: not int value"
       end
-    (*| FunExp (_, x, _, f) ->
-      FunV (
-        fun (tvs, us) -> fun v -> 
-        eval_exp (Environment.add x ([], v) kenv) @@ subst_exp (Utils.List.zip tvs us) f
-      )
-    | FixExp (_, x, y, _, _, f') ->
-      FunV (
-        fun (tvs, us) -> fun v ->
-        let f' = subst_exp (Utils.List.zip tvs us) f' in
-        let rec f _ v =
-          let kenv = Environment.add x (tvs, FunV f) kenv in
-          let kenv = Environment.add y ([], v) kenv in
-          eval_exp kenv f'
-        in f ([], []) v
-      )*)
-    | AppExp (_, (x1, tas1), (x2, _)) -> 
+    | AppExp ((x1, tas1), (x2, _)) -> 
       let tvs1, v1 = Environment.find x1 kenv in
       let _, v2 = Environment.find x2 kenv in
       let us1 = List.map nu_to_fresh tas1 in
@@ -291,10 +274,10 @@ module KNorm = struct
     (*| CastExp (r, f, u1, u2, p) ->
       let v = eval_exp kenv f in
       cast ~debug:debug v u1 u2 r p*)
-    | LetExp (_, x, _, tvs, f1, f2) -> 
+    | LetExp (x, _, tvs, f1, f2) -> 
       let v1 = eval_exp kenv f1 in
       eval_exp (Environment.add x (tvs, v1) kenv) f2
-    | LetRecExp (_, x, _, tvs, (y, _), f1, f2) -> 
+    | LetRecExp (x, _, tvs, (y, _), f1, f2) -> 
       let v1 = 
         FunV (
           fun (tvs, us) -> fun v ->

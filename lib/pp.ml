@@ -314,51 +314,39 @@ module KNorm = struct
         pp_list @@ List.map (fun x -> TyVar x) tvs
 
   let gt_exp e e1 = match e, e1 with
-    | (Var _ | IConst _ | UConst _), _ -> raise @@ Syntax_error(* "gt_exp: value-exp was given as e"*)
+    | (Var _ | IConst _ | UConst), _ -> raise @@ Syntax_error(* "gt_exp: value-exp was given as e"*)
     | (BinOp _ | AppExp _), _ -> raise @@ Syntax_error(* "gt_exp : expression not contain exp was given as e"*)
     | (IfEqExp _ | IfLteExp _), (LetExp _ | LetRecExp _) -> true
     | _ -> false
   
   let gte_exp e e1 = match e, e1 with
-    | BinOp (_, op, _ , _), BinOp (_, op1, _, _) when op = op1 -> true
+    | BinOp (op, _ , _), BinOp (op1, _, _) when op = op1 -> true
     | AppExp _, AppExp _ | (LetExp _ | LetRecExp _) , (LetExp _ | LetRecExp _) -> true
     | (IfEqExp _ | IfLteExp _), (IfEqExp _ | IfLteExp _) -> true
     | _ -> gt_exp e e1
 
   let rec pp_exp ppf = function
-    | Var (_, k_x) -> pp_print_k_id ppf k_x
-    | IConst (_, i) -> pp_print_int ppf i
-    | UConst _ -> pp_print_string ppf "()"
-    | BinOp (_, op, k_x1, k_x2) ->
+    | Var k_x -> pp_print_k_id ppf k_x
+    | IConst i -> pp_print_int ppf i
+    | UConst -> pp_print_string ppf "()"
+    | BinOp (op, k_x1, k_x2) ->
       fprintf ppf "%a %a %a"
         pp_print_k_id k_x1
         pp_binop op
         pp_print_k_id k_x2
-    | IfEqExp (_, k_x, k_y, e1, e2) ->
+    | IfEqExp (k_x, k_y, e1, e2) ->
       fprintf ppf "if %a=%a then %a else %a"
         pp_print_k_id k_x
         pp_print_k_id k_y
         pp_exp e1
         pp_exp e2
-    | IfLteExp (_, k_x, k_y, e1, e2) ->
+    | IfLteExp (k_x, k_y, e1, e2) ->
       fprintf ppf "if %a<=%a then %a else %a"
         pp_print_k_id k_x
         pp_print_k_id k_y
         pp_exp e1
         pp_exp e2
-    (*| FunExp (_, x, u, e) ->
-      fprintf ppf "fun (%s:%a) -> %a"
-        x
-        pp_ty u
-        pp_exp e
-    | FixExp (_, x, y, u1, u2, e) ->
-      fprintf ppf "fix %s (%s: %a): %a = %a"
-        x
-        y
-        pp_ty u1
-        pp_ty u2
-        pp_exp e*)
-    | AppExp (_, k_x1, k_x2) -> 
+    | AppExp (k_x1, k_x2) -> 
       fprintf ppf "%a %a"
         pp_print_k_id k_x1
         pp_print_k_id k_x2
@@ -372,14 +360,14 @@ module KNorm = struct
           pp_exp e
           pp_ty u1
           pp_ty u2*)
-    | LetExp (_, x, u, tvs, e1, e2) as e ->
+    | LetExp (x, u, tvs, e1, e2) as e ->
         fprintf ppf "let (%s:%a) = %a%a in %a"
           x
           pp_ty u
           pp_let_tyabses tvs
           (with_paren (gt_exp e e1) pp_exp) e1
           (with_paren (gte_exp e e2) pp_exp) e2
-    | LetRecExp (_, x, u, tvs, (id, u'), e1, e2) as e ->
+    | LetRecExp (x, u, tvs, (id, u'), e1, e2) as e ->
         fprintf ppf "let (%s:%a) = %afun (%s:%a) -> %a in %a"
           x
           pp_ty u
