@@ -313,21 +313,15 @@ module KNorm = struct
       fprintf ppf "Λ%a. "
         pp_list @@ List.map (fun x -> TyVar x) tvs
 
-  let pp_fun_args ppf args = 
-    let pp_sep ppf () = fprintf ppf " -> fun " in
-    let pp_id_ty ppf (x, ty) = fprintf ppf "(%s:%a)" x pp_ty ty in
-    let pp_list ppf args = pp_print_list pp_id_ty ppf args ~pp_sep:pp_sep in
-    fprintf ppf "fun %a ->" pp_list args
-
   let gt_exp e e1 = match e, e1 with
     | (Var _ | IConst _ | UConst _), _ -> raise @@ Syntax_error(* "gt_exp: value-exp was given as e"*)
     | (BinOp _ | AppExp _), _ -> raise @@ Syntax_error(* "gt_exp : expression not contain exp was given as e"*)
-    | (IfEqExp _ | IfLteExp _), (LetExp _ | LetFunExp _ | LetFixExp _) -> true
+    | (IfEqExp _ | IfLteExp _), (LetExp _ | LetRecExp _) -> true
     | _ -> false
   
   let gte_exp e e1 = match e, e1 with
     | BinOp (_, op, _ , _), BinOp (_, op1, _, _) when op = op1 -> true
-    | AppExp _, AppExp _ | (LetExp _ | LetFunExp _ | LetFixExp _) , (LetExp _ | LetFunExp _ | LetFixExp _) -> true
+    | AppExp _, AppExp _ | (LetExp _ | LetRecExp _) , (LetExp _ | LetRecExp _) -> true
     | (IfEqExp _ | IfLteExp _), (IfEqExp _ | IfLteExp _) -> true
     | _ -> gt_exp e e1
 
@@ -385,20 +379,13 @@ module KNorm = struct
           pp_let_tyabses tvs
           (with_paren (gt_exp e e1) pp_exp) e1
           (with_paren (gte_exp e e2) pp_exp) e2
-    | LetFunExp (_, x, u, tvs, args, e1, e2) as e ->
-        fprintf ppf "let (%s:%a) = %a%a %a in %a"
+    | LetRecExp (_, x, u, tvs, (id, u'), e1, e2) as e ->
+        fprintf ppf "let (%s:%a) = %afun (%s:%a) -> %a in %a"
           x
           pp_ty u
           pp_let_tyabses tvs
-          pp_fun_args args
-          (with_paren (gt_exp e e1) pp_exp) e1
-          (with_paren (gte_exp e e2) pp_exp) e2
-    | LetFixExp (_, x, u, tvs, args, e1, e2) as e ->
-        fprintf ppf "let rec (%s:%a) = %a%a %a in %a"
-          x
-          pp_ty u
-          pp_let_tyabses tvs
-          pp_fun_args args
+          id
+          pp_ty u'
           (with_paren (gt_exp e e1) pp_exp) e1
           (with_paren (gte_exp e e2) pp_exp) e2
 
@@ -410,19 +397,13 @@ module KNorm = struct
         pp_ty u
         pp_let_tyabses tvs
         pp_exp e
-    | LetFunDecl (x, u, tvs, args, e) ->
-        fprintf ppf "let (%s:%a) = %a%a %a"
+    | LetRecDecl (x, u, tvs, (id, u'), e) ->
+        fprintf ppf "let (%s:%a) = %afun (%s:%a) -> %a"
           x
           pp_ty u
           pp_let_tyabses tvs
-          pp_fun_args args
-          pp_exp e
-    | LetFixDecl (x, u, tvs, args, e) ->
-        fprintf ppf "let rec (%s:%a) = %a%a %a"
-          x
-          pp_ty u
-          pp_let_tyabses tvs
-          pp_fun_args args
+          id
+          pp_ty u'
           pp_exp e
 
   let pp_tag ppf t = pp_ty ppf @@ tag_to_ty t

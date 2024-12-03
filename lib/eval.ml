@@ -213,12 +213,9 @@ module KNorm = struct
     | LetExp (r, x, u, tvs, f1, f2) ->
       let s = List.filter (fun (x, _) -> not @@ List.memq x tvs) s in
       LetExp (r, x, subst_type s u, tvs, subst_exp s f1, subst_exp s f2)
-    | LetFunExp (r, x, u, tvs, args, f1, f2) ->
+    | LetRecExp (r, x, u, tvs, arg, f1, f2) ->
       let s = List.filter (fun (x, _) -> not @@ List.memq x tvs) s in
-      LetFunExp (r, x, subst_type s u, tvs, List.map (fun (x, u) -> (x, subst_type s u)) args, subst_exp s f1, subst_exp s f2)
-    | LetFixExp (r, x, u, tvs, args, f1, f2) ->
-      let s = List.filter (fun (x, _) -> not @@ List.memq x tvs) s in
-      LetFixExp (r, x, subst_type s u, tvs, List.map (fun (x, u) -> (x, subst_type s u)) args, subst_exp s f1, subst_exp s f2)
+      LetRecExp (r, x, subst_type s u, tvs, (fun (x, u) -> (x, subst_type s u)) arg, subst_exp s f1, subst_exp s f2)
 
   let eval_binop op v1 v2 = match op, v1, v2 with
     | Plus, IntV i1, IntV i2 -> IntV (i1 + i2)
@@ -297,34 +294,18 @@ module KNorm = struct
     | LetExp (_, x, _, tvs, f1, f2) -> 
       let v1 = eval_exp kenv f1 in
       eval_exp (Environment.add x (tvs, v1) kenv) f2
-    | LetFunExp (_, x, _, tvs, args, f1, f2) -> 
-      let rec make_FunV args kenv s f = match args with
-        | (x, _) :: t -> 
-          FunV (
-            fun (tvs, us) -> fun v -> make_FunV t (Environment.add x ([], v) kenv) ((Utils.List.zip tvs us)::s) f
-          )
-        | [] -> eval_exp kenv @@ subst_exp (List.concat s) f
-      in let v1 = make_FunV args kenv [] f1 in
-      eval_exp (Environment.add x (tvs, v1) kenv) f2
-    | LetFixExp (_, x, _, tvs, (y, _) :: args, f1, f2) -> 
-      let v1 =
+    | LetRecExp (_, x, _, tvs, (y, _), f1, f2) -> 
+      let v1 = 
         FunV (
           fun (tvs, us) -> fun v ->
-            let f1 = subst_exp (Utils.List.zip tvs us) f1 in
-            let rec f _ v =
-              let kenv = Environment.add x (tvs, FunV f) kenv in
-              let kenv = Environment.add y ([], v) kenv in
-              let rec make_FunV args kenv s f = match args with
-                | (x, _) :: t -> 
-                  FunV (
-                    fun (tvs, us) -> fun v -> make_FunV t (Environment.add x ([], v) kenv) ((Utils.List.zip tvs us)::s) f
-                  )
-                | [] -> eval_exp kenv @@ subst_exp (List.concat s) f
-              in make_FunV args kenv [] f1
-            in f ([], []) v
+          let f1 = subst_exp (Utils.List.zip tvs us) f1 in
+          let rec f _ v =
+            let kenv = Environment.add x (tvs, FunV f) kenv in
+            let kenv = Environment.add y ([], v) kenv in
+            eval_exp kenv f1
+          in f ([], []) v
         )
       in eval_exp (Environment.add x (tvs, v1) kenv) f2
-    | LetFixExp _ -> raise @@ Eval_bug "LetFixExp should have at least one argument"
   and cast ?(debug=false) v u1 u2 r p = 
     let print_debug f = Utils.Format.make_print_debug debug f in
     print_debug "cast <-- %a: %a => %a\n" Pp.KNorm.pp_value v Pp.pp_ty u1 Pp.pp_ty u2;
@@ -402,35 +383,18 @@ module KNorm = struct
       let v = eval_exp kenv f ~debug:debug in
       let kenv = Environment.add x (tvs, v) kenv in
       kenv, x, v
-    | LetFunDecl (x, _, tvs, args, f) -> 
-      let rec make_FunV args kenv s f = match args with
-        | (x, _) :: t -> 
-          FunV (
-            fun (tvs, us) -> fun v -> make_FunV t (Environment.add x ([], v) kenv) ((Utils.List.zip tvs us)::s) f
-          )
-        | [] -> eval_exp kenv @@ subst_exp (List.concat s) f
-      in let v = make_FunV args kenv [] f in
-      let kenv = Environment.add x (tvs, v) kenv in
-      kenv, x, v
-    | LetFixDecl (x, _, tvs, (y, _) :: args, f1) -> 
-      let v =
+    | LetRecDecl (x, _, tvs, (y, _), f') -> 
+      let v = 
         FunV (
           fun (tvs, us) -> fun v ->
-            let f1 = subst_exp (Utils.List.zip tvs us) f1 in
-            let rec f _ v =
-              let kenv = Environment.add x (tvs, FunV f) kenv in
-              let kenv = Environment.add y ([], v) kenv in
-              let rec make_FunV args kenv s f = match args with
-                | (x, _) :: t -> 
-                  FunV (
-                    fun (tvs, us) -> fun v -> make_FunV t (Environment.add x ([], v) kenv) ((Utils.List.zip tvs us)::s) f
-                  )
-                | [] -> eval_exp kenv @@ subst_exp (List.concat s) f
-              in make_FunV args kenv [] f1
-            in f ([], []) v
+          let f' = subst_exp (Utils.List.zip tvs us) f' in
+          let rec f _ v =
+            let kenv = Environment.add x (tvs, FunV f) kenv in
+            let kenv = Environment.add y ([], v) kenv in
+            eval_exp kenv f'
+          in f ([], []) v
         )
       in let kenv = Environment.add x (tvs, v) kenv in
       kenv, x, v
-    | LetFixDecl _ -> raise @@ Eval_bug "LetFixExp should have at least one argument"
 
 end

@@ -235,8 +235,7 @@ module KNorm = struct
     | CastExp of range * k_id * ty * ty * polarity
     (*| CastExp of range * exp * ty * ty * polarity*)
     | LetExp of range * id * ty * tyvar list * exp * exp
-    | LetFunExp of range * id * ty * tyvar list * (id * ty) list * exp * exp
-    | LetFixExp of range * id * ty * tyvar list * (id * ty) list * exp * exp
+    | LetRecExp of range * id * ty * tyvar list * (id * ty) * exp * exp
 
   let range_of_exp = function
     | Var (r, _)
@@ -250,14 +249,12 @@ module KNorm = struct
     | AppExp (r, _, _)
     | CastExp (r, _, _, _, _)
     | LetExp (r, _, _, _, _, _)
-    | LetFunExp (r, _, _, _, _, _, _)
-    | LetFixExp (r, _, _, _, _, _, _) -> r
+    | LetRecExp (r, _, _, _, _, _, _) -> r
 
   type program =
     | Exp of exp
     | LetDecl of id * ty * tyvar list * exp
-    | LetFunDecl of id * ty * tyvar list * (id * ty) list * exp
-    | LetFixDecl of id * ty * tyvar list * (id * ty) list * exp
+    | LetRecDecl of id * ty * tyvar list * (id * ty) * exp
 
   type tag = I | B | U | Ar
 
