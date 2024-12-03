@@ -51,6 +51,7 @@ let rec read_eval_print lexbuf env tyenv kfunenvs kenv =
         Pp.CC.pp_value v;*)
 
       (* Evaluation on kNormalized term *)
+      print_debug "***** Eval *****\n";
       let kenv, kx, kv = Eval.KNorm.eval_program kenv kf ~debug:!debug in
       print_debug "k-Normal :: ";
       print "%a : %a = %a\n"
@@ -69,7 +70,12 @@ let rec read_eval_print lexbuf env tyenv kfunenvs kenv =
       Utils.Lexing.flush_input lexbuf
     | Typing.Type_error message ->
       print "Type_error: %s\n" message
-    | Eval.Blame (r, p) -> begin
+    (*| Eval.Blame (r, p) -> begin
+        match p with
+        | Pos -> print "Blame on the expression side:\n%a\n" Utils.Error.pp_range r
+        | Neg -> print "Blame on the environment side:\n%a\n" Utils.Error.pp_range r
+      end*)
+    | Eval.KBlame (r, p) -> begin
         match p with
         | Pos -> print "Blame on the expression side:\n%a\n" Utils.Error.pp_range r
         | Neg -> print "Blame on the environment side:\n%a\n" Utils.Error.pp_range r
