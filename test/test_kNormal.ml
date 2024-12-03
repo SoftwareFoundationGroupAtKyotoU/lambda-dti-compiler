@@ -18,7 +18,7 @@ let run tyenv kfunenvs kenv program =
   assert (Typing.is_equal u u');
   let u'' = Typing.CC.type_of_program tyenv f in
   assert (Typing.is_equal u u'');
-  let kf, ku, kfunenvs = KNormal.kNorm_funs tyenv kfunenvs f in
+  let kf, ku, kfunenvs = KNormal.kNorm_funs kfunenvs f in
   assert (Typing.is_equal u ku);
   try
     let kenv, _, kv = Eval.KNorm.eval_program kenv kf in

@@ -3,7 +3,7 @@ open Syntax
 exception Stdlib_bug of string
 exception Stdlib_exit of int
 
-let env, tyenv, kfunenvs, kenv = Environment.empty, Environment.empty, (Environment.empty, Environment.empty), Environment.empty
+let env, tyenv, kfunenvs, kenv = Environment.empty, Environment.empty, (Environment.empty, Environment.empty, Environment.empty), Environment.empty
 
 let is_some_type = tysc_of_ty @@ TyFun (TyDyn, TyBool)
 
@@ -83,8 +83,8 @@ let implementations = [
 
 let env, tyenv, kfunenvs, kenv =
   List.fold_left
-    (fun (env, tyenv, (alphaenv, betaenv), kenv) (x, xs, v, u, kv) ->
-       Environment.add x (xs, v) env, Environment.add x u tyenv, (Environment.add x x alphaenv, Environment.add x x betaenv), Environment.add x (xs, kv) kenv)
+    (fun (env, tyenv, (ktyenv, alphaenv, betaenv), kenv) (x, xs, v, u, kv) ->
+       Environment.add x (xs, v) env, Environment.add x u tyenv, (Environment.add x u ktyenv, Environment.add x x alphaenv, Environment.add x x betaenv), Environment.add x (xs, kv) kenv)
     (env, tyenv, kfunenvs, kenv)
     implementations
 
@@ -107,7 +107,7 @@ let env, tyenv, kfunenvs, kenv =
       let new_tyenv, f, _ = Typing.ITGL.translate tyenv e in
       let _ = Typing.CC.type_of_program tyenv f in
       let env, _, _ = Eval.CC.eval_program env f in
-      let kf, _, kfunenvs = KNormal.kNorm_funs tyenv kfunenvs f in
+      let kf, _, kfunenvs = KNormal.kNorm_funs kfunenvs f in
       let kenv, _, _ = Eval.KNorm.eval_program kenv kf in
       env, new_tyenv, kfunenvs, kenv)
     (env, tyenv, kfunenvs, kenv)

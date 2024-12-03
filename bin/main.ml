@@ -38,7 +38,7 @@ let rec read_eval_print lexbuf env tyenv kfunenvs kenv =
 
       (* k-Normalization *)
       print_debug "***** kNormal *****\n";
-      let kf, ku, kfunenvs = KNormal.kNorm_funs tyenv kfunenvs f ~debug:!debug in
+      let kf, ku, kfunenvs = KNormal.kNorm_funs kfunenvs f ~debug:!debug in
       print_debug "kf: %a\n" Pp.KNorm.pp_program kf;
       assert (Typing.is_equal u ku);
 
