@@ -70,11 +70,34 @@ module CC = struct
     | IConst (_, i) -> KNorm.IConst i, TyInt
     | BConst (_, b) -> let i = if b then 1 else 0 in KNorm.IConst i, TyBool
     | UConst _ -> KNorm.UConst, TyUnit
-    | BinOp (_, op, f1, f2) -> 
-      let _, _, ui = Typing.type_of_binop op in
-      let fu1 = k_normalize_exp tyenv f1 in
-      let fu2 = k_normalize_exp tyenv f2 in
-      insert_let fu1 (fun x -> (insert_let fu2 (fun y -> KNorm.BinOp (op, x, y), ui)))
+    | BinOp (r, op, f1, f2) as f -> begin match op with
+      | Plus -> 
+        let _, _, ui = Typing.type_of_binop op in
+        let fu1 = k_normalize_exp tyenv f1 in
+        let fu2 = k_normalize_exp tyenv f2 in
+        insert_let fu1 (fun x -> (insert_let fu2 (fun y -> KNorm.Add (x, y), ui)))
+      | Minus ->
+        let _, _, ui = Typing.type_of_binop op in
+        let fu1 = k_normalize_exp tyenv f1 in
+        let fu2 = k_normalize_exp tyenv f2 in
+        insert_let fu1 (fun x -> (insert_let fu2 (fun y -> KNorm.Sub (x, y), ui))) 
+      | Mult -> 
+        let _, _, ui = Typing.type_of_binop op in
+        let fu1 = k_normalize_exp tyenv f1 in
+        let fu2 = k_normalize_exp tyenv f2 in
+        insert_let fu1 (fun x -> (insert_let fu2 (fun y -> KNorm.Mul (x, y), ui)))
+      | Div -> 
+        let _, _, ui = Typing.type_of_binop op in
+        let fu1 = k_normalize_exp tyenv f1 in
+        let fu2 = k_normalize_exp tyenv f2 in
+        insert_let fu1 (fun x -> (insert_let fu2 (fun y -> KNorm.Div (x, y), ui)))
+      | Mod -> 
+        let _, _, ui = Typing.type_of_binop op in
+        let fu1 = k_normalize_exp tyenv f1 in
+        let fu2 = k_normalize_exp tyenv f2 in
+        insert_let fu1 (fun x -> (insert_let fu2 (fun y -> KNorm.Mod (x, y), ui)))
+      | _ -> k_normalize_exp tyenv (IfExp (r, f, BConst (r, true), BConst (r, false)))
+      end
     | IfExp (_, f1, f2, f3) ->
       let fu11, fu12, op_b, ord_b = cond_if tyenv f1 in
       let f2', u2 = k_normalize_exp tyenv f2 in
@@ -161,7 +184,11 @@ module KNorm = struct
   let rec beta_exp idenv = function
     | Var kid -> Var (find kid idenv)
     | IConst _ | UConst as f -> f
-    | BinOp (op, kid1, kid2) -> BinOp (op, find kid1 idenv, find kid2 idenv)
+    | Add (kid1, kid2) -> Add (find kid1 idenv, find kid2 idenv)
+    | Sub (kid1, kid2) -> Sub (find kid1 idenv, find kid2 idenv)
+    | Mul (kid1, kid2) -> Mul (find kid1 idenv, find kid2 idenv)
+    | Div (kid1, kid2) -> Div (find kid1 idenv, find kid2 idenv)
+    | Mod (kid1, kid2) -> Mod (find kid1 idenv, find kid2 idenv)
     | IfEqExp (kid1, kid2, f1, f2) ->
       IfEqExp (find kid1 idenv, find kid2 idenv, beta_exp idenv f1, beta_exp idenv f2)
     | IfLteExp (kid1, kid2, f1, f2) ->

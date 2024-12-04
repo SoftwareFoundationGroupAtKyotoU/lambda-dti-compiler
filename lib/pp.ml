@@ -315,12 +315,12 @@ module KNorm = struct
 
   let gt_exp e e1 = match e, e1 with
     | (Var _ | IConst _ | UConst), _ -> raise @@ Syntax_error(* "gt_exp: value-exp was given as e"*)
-    | (BinOp _ | AppExp _), _ -> raise @@ Syntax_error(* "gt_exp : expression not contain exp was given as e"*)
+    | (Add _ | Sub _ | Mul _ | Div _ | Mod _ | AppExp _), _ -> raise @@ Syntax_error(* "gt_exp : expression not contain exp was given as e"*)
     | (IfEqExp _ | IfLteExp _), (LetExp _ | LetRecExp _) -> true
     | _ -> false
   
   let gte_exp e e1 = match e, e1 with
-    | BinOp (op, _ , _), BinOp (op1, _, _) when op = op1 -> true
+    | Add _, Add _ | Sub _, Sub _ | Mul _, Mul _ | Div _, Div _ | Mod _, Mod _ -> true
     | AppExp _, AppExp _ | (LetExp _ | LetRecExp _) , (LetExp _ | LetRecExp _) -> true
     | (IfEqExp _ | IfLteExp _), (IfEqExp _ | IfLteExp _) -> true
     | _ -> gt_exp e e1
@@ -329,10 +329,30 @@ module KNorm = struct
     | Var k_x -> pp_print_k_id ppf k_x
     | IConst i -> pp_print_int ppf i
     | UConst -> pp_print_string ppf "()"
-    | BinOp (op, k_x1, k_x2) ->
-      fprintf ppf "%a %a %a"
+    | Add (k_x1, k_x2) -> 
+      fprintf ppf "%a %s %a"
         pp_print_k_id k_x1
-        pp_binop op
+        "+"
+        pp_print_k_id k_x2
+    | Sub (k_x1, k_x2) -> 
+      fprintf ppf "%a %s %a"
+        pp_print_k_id k_x1
+        "-"
+        pp_print_k_id k_x2
+    | Mul (k_x1, k_x2) -> 
+      fprintf ppf "%a %s %a"
+        pp_print_k_id k_x1
+        "*"
+        pp_print_k_id k_x2
+    | Div (k_x1, k_x2) -> 
+      fprintf ppf "%a %s %a"
+        pp_print_k_id k_x1
+        "/"
+        pp_print_k_id k_x2
+    | Mod (k_x1, k_x2) -> 
+      fprintf ppf "%a %s %a"
+        pp_print_k_id k_x1
+        "mod"
         pp_print_k_id k_x2
     | IfEqExp (k_x, k_y, e1, e2) ->
       fprintf ppf "if %a=%a then %a else %a"

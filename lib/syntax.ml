@@ -226,7 +226,11 @@ module KNorm = struct
     | Var of k_id
     | IConst of int
     | UConst
-    | BinOp of binop * k_id * k_id
+    | Add of k_id * k_id
+    | Sub of k_id * k_id
+    | Mul of k_id * k_id
+    | Div of k_id * k_id
+    | Mod of k_id * k_id
     | IfEqExp of k_id * k_id * exp * exp
     | IfLteExp of k_id * k_id * exp * exp
     | AppExp of k_id * k_id

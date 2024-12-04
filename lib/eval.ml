@@ -202,7 +202,11 @@ module KNorm = struct
     in let subst s (x, tas) = (x, List.map (subst_type_k s) tas) in function
     | Var kid -> Var (subst s kid)
     | IConst _ | UConst as f -> f
-    | BinOp (op, kid1, kid2) -> BinOp (op, subst s kid1, subst s kid2)
+    | Add (kid1, kid2) -> Add (subst s kid1, subst s kid2)
+    | Sub (kid1, kid2) -> Sub (subst s kid1, subst s kid2)
+    | Mul (kid1, kid2) -> Mul (subst s kid1, subst s kid2)
+    | Div (kid1, kid2) -> Div (subst s kid1, subst s kid2)
+    | Mod (kid1, kid2) -> Mod (subst s kid1, subst s kid2)
     | IfEqExp (kid1, kid2, f1, f2) -> IfEqExp (subst s kid1, subst s kid2, subst_exp s f1, subst_exp s f2)
     | IfLteExp (kid1, kid2, f1, f2) -> IfLteExp (subst s kid1, subst s kid2, subst_exp s f1, subst_exp s f2)
     | AppExp (kid1, kid2) -> AppExp (subst s kid1, subst s kid2)
@@ -214,20 +218,6 @@ module KNorm = struct
     | LetRecExp (x, u, tvs, arg, f1, f2) ->
       let s = List.filter (fun (x, _) -> not @@ List.memq x tvs) s in
       LetRecExp (x, subst_type s u, tvs, (fun (x, u) -> (x, subst_type s u)) arg, subst_exp s f1, subst_exp s f2)
-
-  let eval_binop op v1 v2 = match op, v1, v2 with
-    | Plus, IntV i1, IntV i2 -> IntV (i1 + i2)
-    | Minus, IntV i1, IntV i2 -> IntV (i1 - i2)
-    | Mult, IntV i1, IntV i2 -> IntV (i1 * i2)
-    | Div, IntV i1, IntV i2 -> IntV (i1 / i2)
-    | Mod, IntV i1, IntV i2 -> IntV (i1 mod i2)
-    | Eq, IntV i1, IntV i2 -> if i1 = i2 then IntV 1 else IntV 0
-    | Neq, IntV i1, IntV i2 -> if i1 <> i2 then IntV 1 else IntV 0
-    | Lt, IntV i1, IntV i2 -> if i1 < i2 then IntV 1 else IntV 0
-    | Lte, IntV i1, IntV i2 -> if i1 <= i2 then IntV 1 else IntV 0
-    | Gt, IntV i1, IntV i2 -> if i1 > i2 then IntV 1 else IntV 0
-    | Gte, IntV i1, IntV i2 -> if i1 >= i2 then IntV 1 else IntV 0
-    | _ -> raise @@ Eval_bug "binop: unexpected type of argument"
 
   let rec eval_exp ?(debug=false) kenv f = 
     if debug then fprintf err_formatter "keval <-- %a\n" Pp.KNorm.pp_exp f;
@@ -242,10 +232,41 @@ module KNorm = struct
       end
     | IConst i -> IntV i
     | UConst -> UnitV
-    | BinOp (op, (x1, _), (x2, _)) ->
+    | Add ((x1, _), (x2, _)) ->
       let _, v1 = Environment.find x1 kenv in
       let _, v2 = Environment.find x2 kenv in
-      eval_binop op v1 v2
+      begin match v1, v2 with
+        | IntV i1, IntV i2 -> IntV (i1 + i2)
+        | _ -> raise @@ Eval_bug "Add: unexpected type of argument"
+      end
+    | Sub ((x1, _), (x2, _)) ->
+      let _, v1 = Environment.find x1 kenv in
+      let _, v2 = Environment.find x2 kenv in
+      begin match v1, v2 with
+        | IntV i1, IntV i2 -> IntV (i1 - i2)
+        | _ -> raise @@ Eval_bug "Sub: unexpected type of argument"
+      end
+    | Mul ((x1, _), (x2, _)) ->
+      let _, v1 = Environment.find x1 kenv in
+      let _, v2 = Environment.find x2 kenv in
+      begin match v1, v2 with
+        | IntV i1, IntV i2 -> IntV (i1 * i2)
+        | _ -> raise @@ Eval_bug "Mul: unexpected type of argument"
+      end
+    | Div ((x1, _), (x2, _)) ->
+      let _, v1 = Environment.find x1 kenv in
+      let _, v2 = Environment.find x2 kenv in
+      begin match v1, v2 with
+        | IntV i1, IntV i2 -> IntV (i1 / i2)
+        | _ -> raise @@ Eval_bug "Div: unexpected type of argument"
+      end
+    | Mod ((x1, _), (x2, _)) ->
+      let _, v1 = Environment.find x1 kenv in
+      let _, v2 = Environment.find x2 kenv in
+      begin match v1, v2 with
+        | IntV i1, IntV i2 -> IntV (i1 mod i2)
+        | _ -> raise @@ Eval_bug "Mod: unexpected type of argument"
+      end
     | IfEqExp ((x1, _), (x2, _), f2, f3) ->
       let _, v1 = Environment.find x1 kenv in
       let _, v2 = Environment.find x2 kenv in
