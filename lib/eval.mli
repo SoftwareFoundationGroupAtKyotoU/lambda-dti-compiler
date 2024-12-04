@@ -15,6 +15,6 @@ end
 module KNorm : sig
   open Syntax.KNorm
 
-  val eval_program : ?debug:bool -> (tyvar list * value) Environment.t -> program -> (tyvar list * value) Environment.t * id * value
+  val eval_program : ?debug:bool -> value Environment.t -> program -> value Environment.t * id * value
 end
 
