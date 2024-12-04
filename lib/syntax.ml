@@ -262,7 +262,7 @@ end
 module Cls = struct
   type label = string
 
-  type closure = { entry : label; actual_fv : id list}
+  type closure = { entry : label; actual_fv : id list }
 
   type exp =
     | Var of id
