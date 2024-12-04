@@ -294,123 +294,95 @@ module KNorm = struct
   | Ty u -> pp_ty ppf u
   | TyNu -> pp_print_string ppf "ν"
 
-  let pp_print_k_id ppf (x, tas) =
-    if List.length tas = 0 then
-      fprintf ppf "%s" x
-    else
-      let pp_sep ppf () = fprintf ppf "," in
-      let pp_list ppf types = pp_print_list pp_tyarg ppf types ~pp_sep:pp_sep in
-      fprintf ppf "%s[%a]"
-        x
-        pp_list tas
+  let pp_print_tas ppf tas =
+    let pp_sep ppf () = fprintf ppf "," in
+    let pp_list ppf types = pp_print_list pp_tyarg ppf types ~pp_sep:pp_sep in
+    fprintf ppf "(%a)"
+      pp_list tas
 
-  let pp_let_tyabses ppf tvs =
-    if List.length tvs = 0 then
-      fprintf ppf ""
-    else
-      let pp_sep ppf () = fprintf ppf "," in
-      let pp_list ppf types = pp_print_list pp_ty ppf types ~pp_sep:pp_sep in
-      fprintf ppf "Λ%a. "
-        pp_list @@ List.map (fun x -> TyVar x) tvs
+  let pp_print_tyabses ppf tvs =
+    let pp_sep ppf () = fprintf ppf "," in
+    let pp_list ppf types = pp_print_list pp_ty ppf types ~pp_sep:pp_sep in
+    fprintf ppf "(%a)"
+      pp_list @@ List.map (fun x -> TyVar x) tvs
 
   let gt_exp e e1 = match e, e1 with
     | (Var _ | IConst _ | UConst), _ -> raise @@ Syntax_error(* "gt_exp: value-exp was given as e"*)
-    | (Add _ | Sub _ | Mul _ | Div _ | Mod _ | AppExp _), _ -> raise @@ Syntax_error(* "gt_exp : expression not contain exp was given as e"*)
+    | (Add _ | Sub _ | Mul _ | Div _ | Mod _ | AppExp _ | AppTy _), _ -> raise @@ Syntax_error(* "gt_exp : expression not contain exp was given as e"*)
     | (IfEqExp _ | IfLteExp _), (LetExp _ | LetRecExp _) -> true
     | _ -> false
   
   let gte_exp e e1 = match e, e1 with
     | Add _, Add _ | Sub _, Sub _ | Mul _, Mul _ | Div _, Div _ | Mod _, Mod _ -> true
-    | AppExp _, AppExp _ | (LetExp _ | LetRecExp _) , (LetExp _ | LetRecExp _) -> true
+    | AppTy _, AppTy _ | AppExp _, AppExp _ | (LetExp _ | LetRecExp _) , (LetExp _ | LetRecExp _) -> true
     | (IfEqExp _ | IfLteExp _), (IfEqExp _ | IfLteExp _) -> true
     | _ -> gt_exp e e1
 
   let rec pp_exp ppf = function
-    | Var k_x -> pp_print_k_id ppf k_x
+    | Var x -> pp_print_string ppf x
     | IConst i -> pp_print_int ppf i
     | UConst -> pp_print_string ppf "()"
-    | Add (k_x1, k_x2) -> 
-      fprintf ppf "%a %s %a"
-        pp_print_k_id k_x1
-        "+"
-        pp_print_k_id k_x2
-    | Sub (k_x1, k_x2) -> 
-      fprintf ppf "%a %s %a"
-        pp_print_k_id k_x1
-        "-"
-        pp_print_k_id k_x2
-    | Mul (k_x1, k_x2) -> 
-      fprintf ppf "%a %s %a"
-        pp_print_k_id k_x1
-        "*"
-        pp_print_k_id k_x2
-    | Div (k_x1, k_x2) -> 
-      fprintf ppf "%a %s %a"
-        pp_print_k_id k_x1
-        "/"
-        pp_print_k_id k_x2
-    | Mod (k_x1, k_x2) -> 
-      fprintf ppf "%a %s %a"
-        pp_print_k_id k_x1
-        "mod"
-        pp_print_k_id k_x2
-    | IfEqExp (k_x, k_y, e1, e2) ->
-      fprintf ppf "if %a=%a then %a else %a"
-        pp_print_k_id k_x
-        pp_print_k_id k_y
+    | Add (x, y) -> 
+      fprintf ppf "%s %s %s" x "+" y
+    | Sub (x, y) -> 
+      fprintf ppf "%s %s %s" x "-" y
+    | Mul (x, y) -> 
+      fprintf ppf "%s %s %s" x "*" y
+    | Div (x, y) -> 
+      fprintf ppf "%s %s %s" x "/" y
+    | Mod (x, y) -> 
+      fprintf ppf "%s %s %s" x "mod" y
+    | IfEqExp (x, y, e1, e2) ->
+      fprintf ppf "if %s=%s then %a else %a"
+        x
+        y
         pp_exp e1
         pp_exp e2
-    | IfLteExp (k_x, k_y, e1, e2) ->
-      fprintf ppf "if %a<=%a then %a else %a"
-        pp_print_k_id k_x
-        pp_print_k_id k_y
+    | IfLteExp (x, y, e1, e2) ->
+      fprintf ppf "if %s<=%s then %a else %a"
+        x
+        y
         pp_exp e1
         pp_exp e2
-    | AppExp (k_x1, k_x2) -> 
-      fprintf ppf "%a %a"
-        pp_print_k_id k_x1
-        pp_print_k_id k_x2
-    | CastExp (_, k_x, u1, u2, _) ->
-        fprintf ppf "%a: %a => %a"
-          pp_print_k_id k_x
+    | AppExp (x, y) -> 
+      fprintf ppf "%s %s" x y
+    | AppTy (x, tvs, tas) ->
+      fprintf ppf "%s[%a<-%a]"
+        x
+        pp_print_tyabses tvs
+        pp_print_tas tas
+    | CastExp (_, x, u1, u2, _) ->
+        fprintf ppf "%s: %a => %a"
+          x
           pp_ty u1
           pp_ty u2
-    (*| CastExp (_, e, u1, u2, _) ->
-        fprintf ppf "(%a): %a => %a"
-          pp_exp e
-          pp_ty u1
-          pp_ty u2*)
-    | LetExp (x, u, tvs, e1, e2) as e ->
-        fprintf ppf "let (%s:%a) = %a%a in %a"
+    | LetExp (x, u, e1, e2) as e ->
+        fprintf ppf "let (%s:%a) = %a in %a"
           x
           pp_ty u
-          pp_let_tyabses tvs
           (with_paren (gt_exp e e1) pp_exp) e1
           (with_paren (gte_exp e e2) pp_exp) e2
-    | LetRecExp (x, u, tvs, (id, u'), e1, e2) as e ->
-        fprintf ppf "let (%s:%a) = %afun (%s:%a) -> %a in %a"
+    | LetRecExp (x, u, (y, u'), e1, e2) as e ->
+        fprintf ppf "let (%s:%a) = fun (%s:%a) -> %a in %a"
           x
           pp_ty u
-          pp_let_tyabses tvs
-          id
+          y
           pp_ty u'
           (with_paren (gt_exp e e1) pp_exp) e1
           (with_paren (gte_exp e e2) pp_exp) e2
 
   let pp_program ppf = function
     | Exp e -> pp_exp ppf e
-    | LetDecl (x, u, tvs, e) ->
-      fprintf ppf "let (%s:%a) = %a%a"
+    | LetDecl (x, u, e) ->
+      fprintf ppf "let (%s:%a) = %a"
         x
         pp_ty u
-        pp_let_tyabses tvs
         pp_exp e
-    | LetRecDecl (x, u, tvs, (id, u'), e) ->
-        fprintf ppf "let (%s:%a) = %afun (%s:%a) -> %a"
+    | LetRecDecl (x, u, (y, u'), e) ->
+        fprintf ppf "let (%s:%a) = fun (%s:%a) -> %a"
           x
           pp_ty u
-          pp_let_tyabses tvs
-          id
+          y
           pp_ty u'
           pp_exp e
 

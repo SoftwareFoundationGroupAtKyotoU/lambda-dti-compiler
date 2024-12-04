@@ -220,29 +220,27 @@ module CC = struct
 end
 
 module KNorm = struct
-  type k_id = id * tyarg list
-
   type exp =
-    | Var of k_id
+    | Var of id
     | IConst of int
     | UConst
-    | Add of k_id * k_id
-    | Sub of k_id * k_id
-    | Mul of k_id * k_id
-    | Div of k_id * k_id
-    | Mod of k_id * k_id
-    | IfEqExp of k_id * k_id * exp * exp
-    | IfLteExp of k_id * k_id * exp * exp
-    | AppExp of k_id * k_id
-    | CastExp of range * k_id * ty * ty * polarity
-    (*| CastExp of range * exp * ty * ty * polarity*)
-    | LetExp of id * ty * tyvar list * exp * exp
-    | LetRecExp of id * ty * tyvar list * (id * ty) * exp * exp
+    | Add of id * id
+    | Sub of id * id
+    | Mul of id * id
+    | Div of id * id
+    | Mod of id * id
+    | IfEqExp of id * id * exp * exp
+    | IfLteExp of id * id * exp * exp
+    | AppExp of id * id
+    | AppTy of id * tyvar list * tyarg list
+    | CastExp of range * id * ty * ty * polarity
+    | LetExp of id * ty * exp * exp
+    | LetRecExp of id * ty * (id * ty) * exp * exp
 
   type program =
     | Exp of exp
-    | LetDecl of id * ty * tyvar list * exp
-    | LetRecDecl of id * ty * tyvar list * (id * ty) * exp
+    | LetDecl of id * ty * exp
+    | LetRecDecl of id * ty * (id * ty) * exp
 
   type tag = I | B | U | Ar
 

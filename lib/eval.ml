@@ -199,117 +199,108 @@ module KNorm = struct
     let subst_type_k s = function
       | Ty u -> Ty (subst_type s u)
       | TyNu -> TyNu
-    in let subst s (x, tas) = (x, List.map (subst_type_k s) tas) in function
-    | Var kid -> Var (subst s kid)
-    | IConst _ | UConst as f -> f
-    | Add (kid1, kid2) -> Add (subst s kid1, subst s kid2)
-    | Sub (kid1, kid2) -> Sub (subst s kid1, subst s kid2)
-    | Mul (kid1, kid2) -> Mul (subst s kid1, subst s kid2)
-    | Div (kid1, kid2) -> Div (subst s kid1, subst s kid2)
-    | Mod (kid1, kid2) -> Mod (subst s kid1, subst s kid2)
-    | IfEqExp (kid1, kid2, f1, f2) -> IfEqExp (subst s kid1, subst s kid2, subst_exp s f1, subst_exp s f2)
-    | IfLteExp (kid1, kid2, f1, f2) -> IfLteExp (subst s kid1, subst s kid2, subst_exp s f1, subst_exp s f2)
-    | AppExp (kid1, kid2) -> AppExp (subst s kid1, subst s kid2)
-    | CastExp (r, kid, u1, u2, p) -> CastExp (r, subst s kid, subst_type s u1, subst_type s u2, p)
-    (*| CastExp (r, f, u1, u2, p) -> CastExp (r, subst_exp s f, subst_type s u1, subst_type s u2, p)*)
-    | LetExp (x, u, tvs, f1, f2) ->
-      let s = List.filter (fun (x, _) -> not @@ List.memq x tvs) s in
-      LetExp (x, subst_type s u, tvs, subst_exp s f1, subst_exp s f2)
-    | LetRecExp (x, u, tvs, arg, f1, f2) ->
-      let s = List.filter (fun (x, _) -> not @@ List.memq x tvs) s in
-      LetRecExp (x, subst_type s u, tvs, (fun (x, u) -> (x, subst_type s u)) arg, subst_exp s f1, subst_exp s f2)
+    in function
+    | Var _ | IConst _ | UConst as f -> f
+    | Add _ | Sub _ | Mul _ | Div _ | Mod _ as f -> f
+    | IfEqExp (x, y, f1, f2) -> IfEqExp (x, y, subst_exp s f1, subst_exp s f2)
+    | IfLteExp (x, y, f1, f2) -> IfLteExp (x, y, subst_exp s f1, subst_exp s f2)
+    | AppExp _ as f -> f
+    | AppTy (x, tvs, tas) -> AppTy (x, tvs, List.map (subst_type_k s) tas)
+    | CastExp (r, x, u1, u2, p) -> CastExp (r, x, subst_type s u1, subst_type s u2, p)
+    | LetExp (x, u, f1, f2) ->
+      LetExp (x, subst_type s u, subst_exp s f1, subst_exp s f2)
+    | LetRecExp (x, u, arg, f1, f2) ->
+      LetRecExp (x, subst_type s u, (fun (x, u) -> (x, subst_type s u)) arg, subst_exp s f1, subst_exp s f2)
 
   let rec eval_exp ?(debug=false) kenv f = 
     if debug then fprintf err_formatter "keval <-- %a\n" Pp.KNorm.pp_exp f;
     let eval_exp = eval_exp ~debug:debug in
     match f with
-    | Var (x, tas) -> 
-      let tvs, v = Environment.find x kenv in
-      let us = List.map nu_to_fresh tas in
-      begin match v with
-        | FunV proc -> FunV (fun _ -> proc (tvs, us))
-        | _ -> v
-      end
+    | Var x -> 
+      Environment.find x kenv
     | IConst i -> IntV i
     | UConst -> UnitV
-    | Add ((x1, _), (x2, _)) ->
-      let _, v1 = Environment.find x1 kenv in
-      let _, v2 = Environment.find x2 kenv in
+    | Add (x1, x2) ->
+      let v1 = Environment.find x1 kenv in
+      let v2 = Environment.find x2 kenv in
       begin match v1, v2 with
         | IntV i1, IntV i2 -> IntV (i1 + i2)
         | _ -> raise @@ Eval_bug "Add: unexpected type of argument"
       end
-    | Sub ((x1, _), (x2, _)) ->
-      let _, v1 = Environment.find x1 kenv in
-      let _, v2 = Environment.find x2 kenv in
+    | Sub (x1, x2) ->
+      let v1 = Environment.find x1 kenv in
+      let v2 = Environment.find x2 kenv in
       begin match v1, v2 with
         | IntV i1, IntV i2 -> IntV (i1 - i2)
         | _ -> raise @@ Eval_bug "Sub: unexpected type of argument"
       end
-    | Mul ((x1, _), (x2, _)) ->
-      let _, v1 = Environment.find x1 kenv in
-      let _, v2 = Environment.find x2 kenv in
+    | Mul (x1, x2) ->
+      let v1 = Environment.find x1 kenv in
+      let v2 = Environment.find x2 kenv in
       begin match v1, v2 with
         | IntV i1, IntV i2 -> IntV (i1 * i2)
         | _ -> raise @@ Eval_bug "Mul: unexpected type of argument"
       end
-    | Div ((x1, _), (x2, _)) ->
-      let _, v1 = Environment.find x1 kenv in
-      let _, v2 = Environment.find x2 kenv in
+    | Div (x1, x2) ->
+      let v1 = Environment.find x1 kenv in
+      let v2 = Environment.find x2 kenv in
       begin match v1, v2 with
         | IntV i1, IntV i2 -> IntV (i1 / i2)
         | _ -> raise @@ Eval_bug "Div: unexpected type of argument"
       end
-    | Mod ((x1, _), (x2, _)) ->
-      let _, v1 = Environment.find x1 kenv in
-      let _, v2 = Environment.find x2 kenv in
+    | Mod (x1, x2) ->
+      let v1 = Environment.find x1 kenv in
+      let v2 = Environment.find x2 kenv in
       begin match v1, v2 with
         | IntV i1, IntV i2 -> IntV (i1 mod i2)
         | _ -> raise @@ Eval_bug "Mod: unexpected type of argument"
       end
-    | IfEqExp ((x1, _), (x2, _), f2, f3) ->
-      let _, v1 = Environment.find x1 kenv in
-      let _, v2 = Environment.find x2 kenv in
+    | IfEqExp (x1, x2, f1, f2) ->
+      let v1 = Environment.find x1 kenv in
+      let v2 = Environment.find x2 kenv in
       begin match v1, v2 with
-        | IntV i1, IntV i2 -> if i1 = i2 then eval_exp kenv f2 else eval_exp kenv f3
+        | IntV i1, IntV i2 -> if i1 = i2 then eval_exp kenv f1 else eval_exp kenv f2
         | _ -> raise @@ Eval_bug "IfEqExp: not int value"
       end
-    | IfLteExp ((x1, _), (x2, _), f2, f3) ->
-      let _, v1 = Environment.find x1 kenv in
-      let _, v2 = Environment.find x2 kenv in
+    | IfLteExp (x1, x2, f1, f2) ->
+      let v1 = Environment.find x1 kenv in
+      let v2 = Environment.find x2 kenv in
       begin match v1, v2 with
-        | IntV i1, IntV i2 -> if i1 <= i2 then eval_exp kenv f2 else eval_exp kenv f3
+        | IntV i1, IntV i2 -> if i1 <= i2 then eval_exp kenv f1 else eval_exp kenv f2
         | _ -> raise @@ Eval_bug "IfLteExp: not int value"
       end
-    | AppExp ((x1, tas1), (x2, _)) -> 
-      let tvs1, v1 = Environment.find x1 kenv in
-      let _, v2 = Environment.find x2 kenv in
-      let us1 = List.map nu_to_fresh tas1 in
+    | AppExp (x1, x2) -> 
+      let v1 = Environment.find x1 kenv in
+      let v2 = Environment.find x2 kenv in
       begin match v1 with
-        | FunV proc -> proc (tvs1, us1) v2 
+        | FunV proc -> proc ([], []) v2 
         | _ -> raise @@ Eval_bug "AppExp: not fun value"
       end
-    | CastExp (r, (x, _), u1, u2, p) ->
-      let _, v = Environment.find x kenv in
+    | AppTy (x, tvs, tas) ->
+      let v1 = Environment.find x kenv in
+      let us = List.map nu_to_fresh tas in
+      begin match v1 with
+        | FunV proc -> FunV (fun _ -> proc (tvs, us))
+        | _ -> raise @@ Eval_bug "AppTy: not fun value"
+      end
+    | CastExp (r, x, u1, u2, p) ->
+      let v = Environment.find x kenv in
       cast ~debug:debug v u1 u2 r p
-    (*| CastExp (r, f, u1, u2, p) ->
-      let v = eval_exp kenv f in
-      cast ~debug:debug v u1 u2 r p*)
-    | LetExp (x, _, tvs, f1, f2) -> 
+    | LetExp (x, _, f1, f2) -> 
       let v1 = eval_exp kenv f1 in
-      eval_exp (Environment.add x (tvs, v1) kenv) f2
-    | LetRecExp (x, _, tvs, (y, _), f1, f2) -> 
+      eval_exp (Environment.add x v1 kenv) f2
+    | LetRecExp (x, _, (y, _), f1, f2) -> 
       let v1 = 
         FunV (
           fun (tvs, us) -> fun v ->
           let f1 = subst_exp (Utils.List.zip tvs us) f1 in
           let rec f _ v =
-            let kenv = Environment.add x (tvs, FunV f) kenv in
-            let kenv = Environment.add y ([], v) kenv in
+            let kenv = Environment.add x (FunV f) kenv in
+            let kenv = Environment.add y v kenv in
             eval_exp kenv f1
           in f ([], []) v
         )
-      in eval_exp (Environment.add x (tvs, v1) kenv) f2
+      in eval_exp (Environment.add x v1 kenv) f2
   and cast ?(debug=false) v u1 u2 r p = 
     let print_debug f = Utils.Format.make_print_debug debug f in
     print_debug "cast <-- %a: %a => %a\n" Pp.KNorm.pp_value v Pp.pp_ty u1 Pp.pp_ty u2;
@@ -383,22 +374,22 @@ module KNorm = struct
 
   let eval_program ?(debug=false) kenv = function
     | Exp f -> let v = eval_exp kenv f ~debug:debug in kenv, "-", v
-    | LetDecl (x, _, tvs, f) ->
+    | LetDecl (x, _, f) ->
       let v = eval_exp kenv f ~debug:debug in
-      let kenv = Environment.add x (tvs, v) kenv in
+      let kenv = Environment.add x v kenv in
       kenv, x, v
-    | LetRecDecl (x, _, tvs, (y, _), f') -> 
+    | LetRecDecl (x, _, (y, _), f') -> 
       let v = 
         FunV (
           fun (tvs, us) -> fun v ->
           let f' = subst_exp (Utils.List.zip tvs us) f' in
           let rec f _ v =
-            let kenv = Environment.add x (tvs, FunV f) kenv in
-            let kenv = Environment.add y ([], v) kenv in
+            let kenv = Environment.add x (FunV f) kenv in
+            let kenv = Environment.add y v kenv in
             eval_exp kenv f'
           in f ([], []) v
         )
-      in let kenv = Environment.add x (tvs, v) kenv in
+      in let kenv = Environment.add x v kenv in
       kenv, x, v
 
 end

@@ -84,7 +84,7 @@ let implementations = [
 let env, tyenv, kfunenvs, kenv =
   List.fold_left
     (fun (env, tyenv, (ktyenv, alphaenv, betaenv), kenv) (x, xs, v, u, kv) ->
-       Environment.add x (xs, v) env, Environment.add x u tyenv, (Environment.add x u ktyenv, Environment.add x x alphaenv, Environment.add x x betaenv), Environment.add x (xs, kv) kenv)
+       Environment.add x (xs, v) env, Environment.add x u tyenv, (Environment.add x u ktyenv, Environment.add x x alphaenv, Environment.add x x betaenv), Environment.add x kv kenv)
     (env, tyenv, kfunenvs, kenv)
     implementations
 
