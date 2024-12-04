@@ -260,6 +260,8 @@ end
 module Cls = struct
   type label = string
 
+  let to_label (x:id) = (x:label)
+
   type closure = { entry : label; actual_fv : id list }
 
   type exp =
@@ -278,9 +280,9 @@ module Cls = struct
     | AppCls of id * id
     | AppDir of label * id
     | Cast of id * ty * ty * range * polarity
-    | Let of id * ty * tyvar list * exp * exp
+    | Let of id * ty * exp * exp
 
-  type fundef = { name : label * ty; args : (id * ty) list; formal_fv : (id * ty) list; body : exp }
+  type fundef = { name : label * ty; arg : id * ty; formal_fv : (id * ty) list; body : exp }
 
   module V = struct
     include Set.Make (
@@ -302,7 +304,7 @@ module Cls = struct
     | AppDir (_, y) -> V.singleton y
     | AppCls (x, y) -> V.of_list [x; y]
     | Cast (x, _, _, _, _) -> V.singleton x
-    | Let (x, _, _, f1, f2) -> V.union (fv f1) (V.remove x (fv f2))
+    | Let (x, _, f1, f2) -> V.union (fv f1) (V.remove x (fv f2))
 
   type program = Prog of fundef list * exp
 

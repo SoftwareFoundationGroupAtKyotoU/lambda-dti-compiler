@@ -4,11 +4,13 @@ exception Closure_bug of string
 exception Closure_error of string
 
 module KNorm = struct
+  open Syntax.KNorm
+
   let toplevel = ref []
 
   let rec toCls_exp tyenv known = function
     | Var x -> Cls.Var x
-    | Int i -> Cls.Int i
+    | IConst i -> Cls.Int i
     | UConst -> Cls.Unit
     | Add (x, y) -> Cls.Add (x, y)
     | Sub (x, y) -> Cls.Sub (x, y)
@@ -17,32 +19,33 @@ module KNorm = struct
     | Mod (x, y) -> Cls.Mod (x, y)
     | IfEqExp (x, y, f1, f2) -> Cls.IfEq (x, y, toCls_exp tyenv known f1, toCls_exp tyenv known f2)
     | IfLteExp (x, y, f1, f2) -> Cls.IfLte (x, y, toCls_exp tyenv known f1, toCls_exp tyenv known f2)
-    | AppExp (x, y) when V.mem x known -> Cls.AppDir (r, to_label x, y)
+    | AppExp (x, y) when Cls.V.mem x known -> Cls.AppDir (Cls.to_label x, y)
     | AppExp (x, y) -> Cls.AppCls (x, y)
+    | AppTy (x, tvs, tas) -> Cls.AppTy (x, tvs, tas)
     | CastExp (r, x, u1, u2, p) -> Cls.Cast (x, u1, u2, r, p)
-    | LetExp (x, u, tvs, f1, f2) -> Cls.Let (x, u, tvs, toCls_exp tyenv f1, toCls_exp (Environment.add x u tyenv) f2)
-    | LetRecExp (x, u, tvs, (y, u'), f1, f2) ->
+    | LetExp (x, u, f1, f2) -> Cls.Let (x, u, toCls_exp tyenv known f1, toCls_exp (Environment.add x u tyenv) known f2)
+    | LetRecExp (x, u, (y, u'), f1, f2) ->
       let toplevel_backup = !toplevel in
-      let env' = Environment.add x u tyenv in
-      let known' = V.add x known in
-      let e1' = toCls_exp (Environment.add y u' tyenv') known' e1 in
-      let zs = V.diff (fv e1') (V.singleton y) in
-      let known', e1' =
-        if V.is_empty zs then known', e1'
-        else toplevel := toplevel_backup;
-        let e1' = toCls_exp (Environment.add y u' tyenv') known e1 in
-        known, e1'
-      in let zs = V.elements (V.diff (fv e1') (V.add x (V.singleton y))) in
+      let tyenv' = Environment.add x u tyenv in
+      let known' = Cls.V.add x known in
+      let f1' = toCls_exp (Environment.add y u' tyenv') known' f1 in
+      let zs = Cls.V.diff (Cls.fv f1') (Cls.V.singleton y) in
+      let known', f1' =
+        if Cls.V.is_empty zs then known', f1'
+        else (toplevel := toplevel_backup;
+        let f1' = toCls_exp (Environment.add y u' tyenv') known f1 in
+        known, f1')
+      in let zs = Cls.V.elements (Cls.V.diff (Cls.fv f1') (Cls.V.add x (Cls.V.singleton y))) in
       let zts = List.map (fun z -> (z, Environment.find z tyenv')) zs in
-      toplevel := { name = (to_label x, u); arg = [(y, u')]; formal_fv = zts; body = e1' } :: !toplevel;
-      let e2 = toCls_exp env'known' e2 in
-      if V.mem x (fv e2) then
-        MakeCls (x, u, { entry = to_label x; actual_fv = zs }, e2)
-      else e2
+      toplevel := { Cls.name = (Cls.to_label x, u); Cls.arg = (y, u'); Cls.formal_fv = zts; Cls.body = f1' } :: !toplevel;
+      let f2 = toCls_exp tyenv' known' f2 in
+      if Cls.V.mem x (Cls.fv f2) then
+        Cls.MakeCls (x, u, { Cls.entry = Cls.to_label x; Cls.actual_fv = zs }, f2)
+      else f2
 
-  let toCls_program = function
+  (*let toCls_program = function
     | Exp f -> Cls.Exp (toCls_exp f)
-    | LetDecl (x, tvs, f) -> LetDecl (x, tvs, toCls_exp f)
+    | LetDecl (x, tvs, f) -> LetDecl (x, tvs, toCls_exp f)*)
 end
 
 (*
