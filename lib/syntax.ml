@@ -258,3 +258,54 @@ module KNorm = struct
     | FunV of ((tyvar list * ty list) -> value -> value)
     | Tagged of tag * value
 end
+
+module Cls = struct
+  type label = string
+
+  type closure = { entry : label; actual_fv : id list}
+
+  type exp =
+    | Var of id
+    | Int of int
+    | Unit
+    | Add of id * id
+    | Sub of id * id
+    | Mul of id * id
+    | Div of id * id
+    | Mod of id * id
+    | IfEq of id * id * exp * exp
+    | IfLte of id * id * exp * exp
+    | MakeCls of id * ty * closure * exp
+    | AppTy of id * tyvar list * tyarg list
+    | AppCls of id * id
+    | AppDir of label * id
+    | Cast of id * ty * ty * range * polarity
+    | Let of id * ty * tyvar list * exp * exp
+
+  type fundef = { name : label * ty; args : (id * ty) list; formal_fv : (id * ty) list; body : exp }
+
+  module V = struct
+    include Set.Make (
+      struct
+        type t = id
+        let compare (a1:id) a2 = compare a1 a2
+      end
+      )
+    let big_union vars = List.fold_right union vars empty
+  end
+
+  let rec fv = function
+    | Var id -> V.singleton id
+    | Int _ | Unit -> V.empty
+    | Add (x, y) | Sub (x, y) | Mul (x, y) | Div (x, y) | Mod (x, y) -> V.of_list [x; y]
+    | IfEq (x, y, f1, f2) | IfLte (x, y, f1, f2) -> V.big_union [V.of_list [x; y]; fv f1; fv f2]
+    | MakeCls (x, _, { entry = _; actual_fv = vs }, f) -> V.remove x (V.union (V.of_list vs) (fv f))
+    | AppTy (x, _, _) -> V.singleton x
+    | AppDir (_, y) -> V.singleton y
+    | AppCls (x, y) -> V.of_list [x; y]
+    | Cast (x, _, _, _, _) -> V.singleton x
+    | Let (x, _, _, f1, f2) -> V.union (fv f1) (V.remove x (fv f2))
+
+  type program = Prog of fundef list * exp
+
+end
