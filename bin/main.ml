@@ -49,10 +49,10 @@ let compile_process progs (_, tyenv, kfunenvs, _) =
 
     print_debug "***** Closure *****\n";
     let p = Closure.KNorm.toCls_program p in
-    print_debug "%a\n" Pp.Cls.pp_program p(*;
+    print_debug "%a\n" Pp.Cls.pp_program p;
 
     print_debug "***** toC *****\n";
-    print_debug "%a\n" ToC.toC_program p*)
+    print_debug "%a\n" ToC.toC_program p
     
   with
   | Failure message ->

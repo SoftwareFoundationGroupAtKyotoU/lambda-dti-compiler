@@ -7,6 +7,8 @@
 *.cmx
 *.cmxs
 *.cmxa
+result/*.exe
+result/*.out
 
 # ocamlbuild working directory
 _build/
@@ -32,3 +34,5 @@ lexer.ml
 parser.conflicts
 parser.ml
 parser.mli
+
+.vscode/
