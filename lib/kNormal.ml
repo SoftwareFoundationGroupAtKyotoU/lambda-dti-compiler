@@ -11,7 +11,7 @@ let counter = ref 0
 let genvar x = 
   let v = !counter in
   counter := v + 1;
-  Printf.sprintf "%s.%d" x !counter
+  Printf.sprintf "%s_%d" x !counter
 
 module CC = struct
   open Syntax.CC
@@ -241,8 +241,11 @@ let kNorm_funs ?(debug=false) (ktyenv, alphaenv, betaenv) f =
   if debug then fprintf err_formatter "alpha: %a\n" Pp.CC.pp_program f;
   let f, u, ktyenv = CC.k_normalize_program ktyenv f in
   if debug then fprintf err_formatter "k_normalize: %a\n" Pp.KNorm.pp_program f;
-  let f, betaenv = KNorm.beta_program betaenv f in
-  if debug then fprintf err_formatter "beta: %a\n" Pp.KNorm.pp_program f;
-  let f = KNorm.assoc_program f in
-  if debug then fprintf err_formatter "assoc: %a\n" Pp.KNorm.pp_program f;
-  f, u, (ktyenv, alphaenv, betaenv)
+  let rec iter betaenv f =
+    let fbeta, betaenv = KNorm.beta_program betaenv f in
+    let fassoc = KNorm.assoc_program fbeta in
+    if f = fassoc then f, u, (ktyenv, alphaenv, betaenv) else 
+      (if debug then fprintf err_formatter "beta: %a\n" Pp.KNorm.pp_program fbeta;
+      if debug then fprintf err_formatter "assoc: %a\n" Pp.KNorm.pp_program fassoc;
+      iter betaenv fassoc)
+  in iter betaenv f
