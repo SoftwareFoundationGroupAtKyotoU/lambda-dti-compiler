@@ -322,16 +322,11 @@ module KNorm = struct
     | Var x -> pp_print_string ppf x
     | IConst i -> pp_print_int ppf i
     | UConst -> pp_print_string ppf "()"
-    | Add (x, y) -> 
-      fprintf ppf "%s %s %s" x "+" y
-    | Sub (x, y) -> 
-      fprintf ppf "%s %s %s" x "-" y
-    | Mul (x, y) -> 
-      fprintf ppf "%s %s %s" x "*" y
-    | Div (x, y) -> 
-      fprintf ppf "%s %s %s" x "/" y
-    | Mod (x, y) -> 
-      fprintf ppf "%s %s %s" x "mod" y
+    | Add (x, y) -> fprintf ppf "%s + %s" x y
+    | Sub (x, y) -> fprintf ppf "%s - %s" x y
+    | Mul (x, y) -> fprintf ppf "%s * %s" x y
+    | Div (x, y) -> fprintf ppf "%s / %s" x y
+    | Mod (x, y) -> fprintf ppf "%s mod %s" x y
     | IfEqExp (x, y, e1, e2) ->
       fprintf ppf "if %s=%s then %a else %a"
         x
@@ -396,4 +391,136 @@ module KNorm = struct
       fprintf ppf "%a: %a => ?"
         pp_value v
         pp_tag t
+end
+
+module Cls = struct
+  open Syntax.Cls
+
+  let pp_tyarg ppf = function
+  | Ty u -> pp_ty ppf u
+  | TyNu -> pp_print_string ppf "ν"
+
+  let pp_print_tas ppf tas =
+    let pp_sep ppf () = fprintf ppf "," in
+    let pp_list ppf types = pp_print_list pp_tyarg ppf types ~pp_sep:pp_sep in
+    fprintf ppf "(%a)"
+      pp_list tas
+
+  let pp_print_tyabses ppf tvs =
+    let pp_sep ppf () = fprintf ppf "," in
+    let pp_list ppf types = pp_print_list pp_ty ppf types ~pp_sep:pp_sep in
+    fprintf ppf "(%a)"
+      pp_list @@ List.map (fun x -> TyVar x) tvs
+  
+  let pp_print_cls ppf { entry = x; actual_fv = ids } =
+    if List.length ids = 0 then 
+      fprintf ppf "%s" x
+    else let pp_sep ppf () = fprintf ppf "," in
+    let pp_list ppf xs = pp_print_list pp_print_string ppf xs ~pp_sep:pp_sep in
+    fprintf ppf "%s[%a]"
+      x
+      pp_list ids
+
+  let gt_exp e e1 = match e, e1 with
+    | (Var _ | Int _ | Unit), _ -> raise @@ Syntax_error(* "gt_exp: value-exp was given as e"*)
+    | (Add _ | Sub _ | Mul _ | Div _ | Mod _ | AppCls _ | AppDir _ | AppTy _), _ -> raise @@ Syntax_error(* "gt_exp : expression not contain exp was given as e"*)
+    | (IfEq _ | IfLte _), (Let _) -> true
+    | _ -> false
+  
+  let gte_exp e e1 = match e, e1 with
+    | Add _, Add _ | Sub _, Sub _ | Mul _, Mul _ | Div _, Div _ | Mod _, Mod _ -> true
+    | AppCls _, AppCls _ | AppDir _, AppDir _ | AppTy _, AppTy _ | Let _ , Let _ -> true
+    | (IfEq _ | IfLte _), (IfEq _ | IfLte _) -> true
+    | _ -> gt_exp e e1
+
+  let rec pp_exp ppf = function
+    | Var x -> pp_print_string ppf x
+    | Int i -> pp_print_int ppf i
+    | Unit -> pp_print_string ppf "()"
+    | Add (x, y) -> fprintf ppf "%s + %s" x y
+    | Sub (x, y) -> fprintf ppf "%s - %s" x y
+    | Mul (x, y) -> fprintf ppf "%s * %s" x y
+    | Div (x, y) -> fprintf ppf "%s / %s" x y
+    | Mod (x, y) -> fprintf ppf "%s mod %s" x y
+    | IfEq (x, y, e1, e2) ->
+      fprintf ppf "if %s=%s then %a else %a"
+        x
+        y
+        pp_exp e1
+        pp_exp e2
+    | IfLte (x, y, e1, e2) ->
+      fprintf ppf "if %s<=%s then %a else %a"
+        x
+        y
+        pp_exp e1
+        pp_exp e2
+    | MakeCls (x, u, cls, f) ->
+      fprintf ppf "cls (%s:%a) = %a in %a"
+        x
+        pp_ty u
+        pp_print_cls cls
+        pp_exp f
+    | AppCls (x, y) -> fprintf ppf "cls(%s) %s" x y
+    | AppDir (l, x) -> fprintf ppf "label(%s) %s" l x
+    | AppTy (x, tvs, tas) ->
+      fprintf ppf "%s[%a<-%a]"
+        x
+        pp_print_tyabses tvs
+        pp_print_tas tas
+    | Cast (x, u1, u2, _, _) ->
+        fprintf ppf "%s: %a => %a"
+          x
+          pp_ty u1
+          pp_ty u2
+    | Let (x, u, e1, e2) as e ->
+        fprintf ppf "let (%s:%a) = %a in %a"
+          x
+          pp_ty u
+          (with_paren (gt_exp e e1) pp_exp) e1
+          (with_paren (gte_exp e e2) pp_exp) e2
+
+  let pp_fv ppf (x, u) =
+    fprintf ppf "%s:%a"
+      x
+      pp_ty u
+
+  let pp_print_fv ppf fvl =
+    let pp_sep ppf () = fprintf ppf "," in
+    let pp_list ppf fvs = pp_print_list pp_fv ppf fvs ~pp_sep:pp_sep in
+    fprintf ppf "%a"
+      pp_list fvl
+
+  let pp_fundef ppf { name = (l, ul); arg = (x, ux); formal_fv = fvl; body = f} = 
+    if List.length fvl = 0 then
+      fprintf ppf "let rec (%s:%a) (%s:%a) = %a"
+        l
+        pp_ty ul
+        x
+        pp_ty ux
+        pp_exp f
+    else
+      fprintf ppf "let rec (%s:%a) (%s:%a) = %a (fv:%a)"
+        l
+        pp_ty ul
+        x
+        pp_ty ux
+        pp_exp f
+        pp_print_fv fvl
+
+  let pp_toplevel ppf toplevel =
+    let pp_sep ppf () = fprintf ppf "\n" in
+    let pp_list ppf defs = pp_print_list pp_fundef ppf defs ~pp_sep:pp_sep in
+    fprintf ppf "%a"
+      pp_list toplevel
+
+  let pp_program ppf = function
+    | Prog (toplevel, cf) ->
+      if List.length toplevel = 0 
+        then 
+          fprintf ppf "exp:%a"
+            pp_exp cf
+        else
+          fprintf ppf "%a\nexp:%a"
+            pp_toplevel toplevel
+            pp_exp cf
 end

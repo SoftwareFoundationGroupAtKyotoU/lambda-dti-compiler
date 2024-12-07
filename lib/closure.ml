@@ -6,6 +6,10 @@ exception Closure_error of string
 module KNorm = struct
   open Syntax.KNorm
 
+  (*let is_function = function
+    | TyInt | TyBool | TyUnit -> false
+    | _ -> true*)
+
   let toplevel = ref []
 
   let rec toCls_exp tyenv known = function
@@ -23,7 +27,13 @@ module KNorm = struct
     | AppExp (x, y) -> Cls.AppCls (x, y)
     | AppTy (x, tvs, tas) -> Cls.AppTy (x, tvs, tas)
     | CastExp (r, x, u1, u2, p) -> Cls.Cast (x, u1, u2, r, p)
-    | LetExp (x, u, f1, f2) -> Cls.Let (x, u, toCls_exp tyenv known f1, toCls_exp (Environment.add x u tyenv) known f2)
+    | LetExp (x, u, f1, f2) -> 
+      let f2 = toCls_exp (Environment.add x u tyenv) known f2 in
+      (*let f2 = if Cls.V.mem x (Cls.fv f2) && is_function u then
+          Cls.MakeCls (x, u, { Cls.entry = Cls.to_label x; Cls.actual_fv = [] }, f2)
+        else f2
+      in*)
+      Cls.Let (x, u, toCls_exp tyenv known f1, f2)
     | LetRecExp (x, u, (y, u'), f1, f2) ->
       let toplevel_backup = !toplevel in
       let tyenv' = Environment.add x u tyenv in
@@ -43,9 +53,10 @@ module KNorm = struct
         Cls.MakeCls (x, u, { Cls.entry = Cls.to_label x; Cls.actual_fv = zs }, f2)
       else f2
 
-  (*let toCls_program = function
-    | Exp f -> Cls.Exp (toCls_exp f)
-    | LetDecl (x, tvs, f) -> LetDecl (x, tvs, toCls_exp f)*)
+  let toCls_program p =
+    toplevel := [];
+    let f = toCls_exp Environment.empty Cls.V.empty p in
+    Cls.Prog (List.rev !toplevel, f)
 end
 
 (*

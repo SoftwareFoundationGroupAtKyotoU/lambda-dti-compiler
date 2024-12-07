@@ -1,7 +1,65 @@
 open Format
 open Lambda_dti
 
+exception Compile_bad of string
+
 let debug = ref false
+
+let programs = ref [] (*Stdlibのために、要変更*)
+
+let compile_process progs (_, tyenv, kfunenvs, _) = 
+  (* Used in all modes *)
+  let print f = fprintf std_formatter f in
+  (* Used in debug mode *)
+  let print_debug f = Utils.Format.make_print_debug !debug f in
+  let rec to_exp ps = match ps with
+    | Syntax.ITGL.Exp e :: [] -> e
+    | Syntax.ITGL.LetDecl (x, e) :: t -> Syntax.ITGL.LetExp (Utils.Error.dummy_range, x, e, to_exp t)
+    | _ -> raise @@ Compile_bad "exp appear in not only last"
+  in let e = Syntax.ITGL.Exp (to_exp (List.rev progs)) in
+  begin try
+    print_debug "\n========== Compilatopn ==========\n";
+
+    (* Type inference *)
+    print_debug "***** Typing *****\n";
+    let e, u = Typing.ITGL.type_of_program tyenv e in
+    print_debug "e: %a\n" Pp.ITGL.pp_program e;
+    print_debug "U: %a\n" Pp.pp_ty u;
+
+    (* NOTE: Typing.ITGL.translate and Typing.CC.type_of_program expect
+     * normalized input *)
+    let tyenv, e, u = Typing.ITGL.normalize tyenv e u in
+
+    (* Translation *)
+    print_debug "***** Cast-insertion *****\n";
+    let _, f, u' = Typing.ITGL.translate tyenv e in
+    print_debug "f: %a\n" Pp.CC.pp_program f;
+    print_debug "U: %a\n" Pp.pp_ty u';
+    assert (Typing.is_equal u u');
+    let u'' = Typing.CC.type_of_program tyenv f in
+    assert (Typing.is_equal u u'');
+
+    (* k-Normalization *)
+    print_debug "***** kNormal *****\n";
+    let kf, ku, _ = KNormal.kNorm_funs kfunenvs f ~debug:!debug in
+    print_debug "kf: %a\n" Pp.KNorm.pp_program kf;
+    assert (Typing.is_equal u ku);
+
+    let p = match kf with Syntax.KNorm.Exp e -> e | _ -> raise @@ Compile_bad "kf is not exp" in
+
+    print_debug "***** Closure *****\n";
+    let p = Closure.KNorm.toCls_program p in
+    print_debug "%a\n" Pp.Cls.pp_program p(*;
+
+    print_debug "***** toC *****\n";
+    print_debug "%a\n" ToC.toC_program p*)
+    
+  with
+  | Failure message ->
+    print "Failure: %s\n" message;
+  | Typing.Type_error message ->
+    print "Type_error in compilation: %s\n" message
+  end
 
 let rec read_eval_print lexbuf env tyenv kfunenvs kenv =
   (* Used in all modes *)
@@ -16,9 +74,10 @@ let rec read_eval_print lexbuf env tyenv kfunenvs kenv =
       print_debug "***** Parser *****\n";
       let e = Parser.toplevel Lexer.main lexbuf in
       print_debug "e: %a\n" Pp.ITGL.pp_program e;
+      programs := e :: !programs;
 
       (* Type inference *)
-      print_debug "***** Typing *****\n";
+      (*print_debug "***** Typing *****\n";
       let e, u = Typing.ITGL.type_of_program tyenv e in
       print_debug "e: %a\n" Pp.ITGL.pp_program e;
       print_debug "U: %a\n" Pp.pp_ty u;
@@ -54,12 +113,18 @@ let rec read_eval_print lexbuf env tyenv kfunenvs kenv =
       print_debug "***** Eval *****\n";
       let kenv, kx, kv = Eval.KNorm.eval_program kenv kf ~debug:!debug in
       print_debug "k-Normal :: ";
-      print "%a : %a = %a\n"
+      print_debug "%a : %a = %a\n"
         pp_print_string kx
         Pp.pp_ty2 ku
-        Pp.KNorm.pp_value kv;
-
-      read_eval_print lexbuf env new_tyenv kfunenvs kenv
+        Pp.KNorm.pp_value kv;*)
+        
+      match e with
+        | Syntax.ITGL.Exp _ -> 
+          compile_process !programs Stdlib.pervasives;
+          programs := List.tl !programs;
+          read_eval_print lexbuf env (*new_*)tyenv kfunenvs kenv
+        | _ -> 
+          read_eval_print lexbuf env (*new_*)tyenv kfunenvs kenv
     with
     | Failure message ->
       print "Failure: %s\n" message;
