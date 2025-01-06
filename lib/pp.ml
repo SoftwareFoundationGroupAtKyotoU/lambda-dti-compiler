@@ -421,18 +421,6 @@ module Cls = struct
       x
       pp_list ids
 
-  let gt_exp e e1 = match e, e1 with
-    | (Var _ | Int _ | Unit), _ -> raise @@ Syntax_error(* "gt_exp: value-exp was given as e"*)
-    | (Add _ | Sub _ | Mul _ | Div _ | Mod _ | AppCls _ | AppDir _ | AppTy _), _ -> raise @@ Syntax_error(* "gt_exp : expression not contain exp was given as e"*)
-    | (IfEq _ | IfLte _), (Let _) -> true
-    | _ -> false
-  
-  let gte_exp e e1 = match e, e1 with
-    | Add _, Add _ | Sub _, Sub _ | Mul _, Mul _ | Div _, Div _ | Mod _, Mod _ -> true
-    | AppCls _, AppCls _ | AppDir _, AppDir _ | AppTy _, AppTy _ | Let _ , Let _ -> true
-    | (IfEq _ | IfLte _), (IfEq _ | IfLte _) -> true
-    | _ -> gt_exp e e1
-
   let rec pp_exp ppf = function
     | Var x -> pp_print_string ppf x
     | Int i -> pp_print_int ppf i
@@ -454,14 +442,8 @@ module Cls = struct
         y
         pp_exp e1
         pp_exp e2
-    | MakeCls (x, u, cls, f) ->
-      fprintf ppf "cls (%s:%a) = %a in %a"
-        x
-        pp_ty u
-        pp_print_cls cls
-        pp_exp f
-    | AppCls (x, y) -> fprintf ppf "cls(%s) %s" x y
-    | AppDir (l, x) -> fprintf ppf "label(%s) %s" l x
+    | AppCls (x, y) -> fprintf ppf "%s:cls %s" x y
+    | AppDir (l, x) -> fprintf ppf "%s:label %s" l x
     | AppTy (x, tvs, tas) ->
       fprintf ppf "%s[%a<-%a]"
         x
@@ -472,12 +454,25 @@ module Cls = struct
           x
           pp_ty u1
           pp_ty u2
-    | Let (x, u, e1, e2) as e ->
+    | MakeCls (x, u, cls, f) ->
+      fprintf ppf "cls (%s:%a) = %a in %a"
+        x
+        pp_ty u
+        pp_print_cls cls
+        pp_exp f
+    | MakeClsLabel (x, u, l, f) ->
+      fprintf ppf "clslabel (%s:%a) = %s in %a"
+        x
+        pp_ty u
+        l
+        pp_exp f
+    | Let (x, u, f1, f2) ->
         fprintf ppf "let (%s:%a) = %a in %a"
           x
           pp_ty u
-          (with_paren (gt_exp e e1) pp_exp) e1
-          (with_paren (gte_exp e e2) pp_exp) e2
+          pp_exp f1
+          pp_exp f2
+    | Insert _ -> raise @@ Syntax_error (*"insert was applied to Cls.pp_exp"*)
 
   let pp_fv ppf (x, u) =
     fprintf ppf "%s:%a"
@@ -517,10 +512,10 @@ module Cls = struct
     | Prog (toplevel, cf) ->
       if List.length toplevel = 0 
         then 
-          fprintf ppf "exp:%a"
+          fprintf ppf "exp:\n%a"
             pp_exp cf
         else
-          fprintf ppf "%a\nexp:%a"
+          fprintf ppf "%a\nexp:\n%a"
             pp_toplevel toplevel
             pp_exp cf
 end

@@ -6,10 +6,6 @@ exception Closure_error of string
 module KNorm = struct
   open Syntax.KNorm
 
-  (*let is_function = function
-    | TyInt | TyBool | TyUnit -> false
-    | _ -> true*)
-
   let toplevel = ref []
 
   let rec toCls_exp tyenv known = function
@@ -28,12 +24,9 @@ module KNorm = struct
     | AppTy (x, tvs, tas) -> Cls.AppTy (x, tvs, tas)
     | CastExp (r, x, u1, u2, p) -> Cls.Cast (x, u1, u2, r, p)
     | LetExp (x, u, f1, f2) -> 
+      let f1 = toCls_exp tyenv known f1 in
       let f2 = toCls_exp (Environment.add x u tyenv) known f2 in
-      (*let f2 = if Cls.V.mem x (Cls.fv f2) && is_function u then
-          Cls.MakeCls (x, u, { Cls.entry = Cls.to_label x; Cls.actual_fv = [] }, f2)
-        else f2
-      in*)
-      Cls.Let (x, u, toCls_exp tyenv known f1, f2)
+      Cls.Let (x, u, f1, f2)
     | LetRecExp (x, u, (y, u'), f1, f2) ->
       let toplevel_backup = !toplevel in
       let tyenv' = Environment.add x u tyenv in
@@ -48,14 +41,24 @@ module KNorm = struct
       in let zs = Cls.V.elements (Cls.V.diff (Cls.fv f1') (Cls.V.add x (Cls.V.singleton y))) in
       let zts = List.map (fun z -> (z, Environment.find z tyenv')) zs in
       toplevel := { Cls.name = (Cls.to_label x, u); Cls.arg = (y, u'); Cls.formal_fv = zts; Cls.body = f1' } :: !toplevel;
-      let f2 = toCls_exp tyenv' known' f2 in
-      if Cls.V.mem x (Cls.fv f2) then
-        Cls.MakeCls (x, u, { Cls.entry = Cls.to_label x; Cls.actual_fv = zs }, f2)
-      else f2
+      let f2' = toCls_exp tyenv' known' f2 in
+      if Cls.V.mem x (Cls.fv f2') then
+        if List.length zs <> 0 then
+          Cls.MakeCls (x, u, { Cls.entry = Cls.to_label x; Cls.actual_fv = zs }, f2')
+        else Cls.MakeClsLabel (x, u, Cls.to_label x, f2')
+      else f2'
+
+  let ini x u (env, vs) = (Environment.add x u env, Cls.V.add x vs)
+
+  let tyenv, venv = 
+    ini "print_newline" (TyFun (TyUnit, TyUnit))
+    @@ ini "print_bool" (TyFun (TyBool, TyUnit)) 
+    @@ ini "print_int" (TyFun (TyInt, TyUnit)) 
+    @@ (Environment.empty, Cls.V.empty)
 
   let toCls_program p =
     toplevel := [];
-    let f = toCls_exp Environment.empty Cls.V.empty p in
+    let f = toCls_exp tyenv venv p in
     Cls.Prog (List.rev !toplevel, f)
 end
 

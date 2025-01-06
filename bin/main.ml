@@ -121,7 +121,7 @@ let rec read_eval_print lexbuf env tyenv kfunenvs kenv =
       match e with
         | Syntax.ITGL.Exp _ -> 
           compile_process !programs Stdlib.pervasives;
-          programs := List.tl !programs;
+          programs := [];
           read_eval_print lexbuf env (*new_*)tyenv kfunenvs kenv
         | _ -> 
           read_eval_print lexbuf env (*new_*)tyenv kfunenvs kenv
@@ -145,6 +145,8 @@ let rec read_eval_print lexbuf env tyenv kfunenvs kenv =
         | Pos -> print "Blame on the expression side:\n%a\n" Utils.Error.pp_range r
         | Neg -> print "Blame on the environment side:\n%a\n" Utils.Error.pp_range r
       end
+    | ToC.ToC_error message ->
+      print "%s\n" message
   end;
   read_eval_print lexbuf env tyenv kfunenvs kenv
 

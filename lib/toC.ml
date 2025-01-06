@@ -3,185 +3,320 @@ open Syntax.Cls
 open Format
 
 exception ToC_bug of string
+exception ToC_error of string
 
-let type_of_return = function
-  | TyFun (_, u) -> u
-  | _ -> raise @@ ToC_bug "not fun type is applied to type_of_return"
+let is_main = ref false
 
-let toC_ty ppf = function
-  | TyInt -> pp_print_string ppf "int"
-  | _ -> raise @@ ToC_bug "toC_ty yet"
+let tvset = ref V.empty
 
-let cnt_vs = ref 0
-
-let toC_v ppf (v, x) =
-  fprintf ppf "\t%s_.zs[%d] = %s;"
-    x
-    !cnt_vs
-    v;
-  cnt_vs := !cnt_vs + 1
+let rec c_of_ty ppf = function
+  | TyInt -> "tyint"
+  | TyBool -> "tybool"
+  | TyUnit -> "tyunit"
+  | TyDyn -> "tydyn"
+  | TyFun (TyDyn, TyDyn) -> "tyar"
+  | TyFun (u1, u2) -> 
+    let c1, c2 = c_of_ty ppf u1, c_of_ty ppf u2 in 
+    let v = KNormal.genvar "_tyfun" in
+    (fprintf ppf "ty %s = { .tykind = TYFUN, .tyfun = { .left = &%s, .right = &%s } };\n"
+      v
+      c1
+      c2);
+    v
+  | TyVar (i, _) -> 
+    let strtv = "_tv" ^ string_of_int i in
+    try 
+      V.find strtv !tvset 
+    with Not_found -> 
+      tvset := V.add strtv !tvset;
+      (fprintf ppf "ty %s = { .tykind = TYVAR };\n"
+        strtv);
+      strtv
 
 let toC_vs ppf vs =
-  cnt_vs := 0;
-  let toC_sep ppf () = fprintf ppf "\n" in
-  let toC_list ppf v = pp_print_list toC_v ppf v ~pp_sep:toC_sep in
+  let toC_sep ppf () = fprintf ppf ", " in
+  let toC_list ppf v = pp_print_list pp_print_string ppf v ~pp_sep:toC_sep in
   fprintf ppf "%a"
     toC_list vs
 
 let rec toC_exp ppf f = match f with
-  | Var x -> pp_print_string ppf x
-  | Int i -> pp_print_int ppf i
-  | Add (x, y) -> fprintf ppf "%s + %s" x y
-  | Sub (x, y) -> fprintf ppf "%s - %s" x y
-  | Mul (x, y) -> fprintf ppf "%s * %s" x y
-  | Div (x, y) -> fprintf ppf "%s / %s" x y
-  | Mod (x, y) -> fprintf ppf "%s %% %s" x y
-  | Let (x, TyInt, f1, (Let _ | MakeCls _ as f2)) ->
-    fprintf ppf "\tint %s = %a;\n%a"
-      x
-      toC_exp f1
-      toC_exp f2
-  | Let (x, TyInt, f1, f2) ->
-    fprintf ppf "\tint %s = %a;\n\treturn %a;"
-      x
-      toC_exp f1
-      toC_exp f2
-  | MakeCls (x, _, { entry = _; actual_fv = vs }, (Let _ | MakeCls _ as f)) ->
-    fprintf ppf "\tcls_%s_t %s_;\n\t%s_.fun = %s;\n%a\n%a"
-      x
-      x
-      x
-      x
-      toC_vs (List.map (fun v -> (v, x)) vs)
-      toC_exp f
-  | MakeCls (x, _, { entry = _; actual_fv = vs }, f) ->
-    fprintf ppf "\tcls_%s_t %s_;\n\t%s_.fun = %s;\n%a\n\treturn %a;"
-      x
-      x
-      x
-      x
-      toC_vs (List.map (fun v -> (v, x)) vs)
-      toC_exp f
-  | AppCls (x, y) when x = "print_int" ->
-    fprintf ppf "printf(\"%%d\\n\", %s)" y
-  | AppCls (x, y) -> 
-    fprintf ppf "%s_.fun(%s, %s_.zs)"
+  | Let (x, _, f1, f2) -> begin match f1 with
+    | Var y -> 
+      fprintf ppf "value %s = %s;\n%a"
+        x
+        y
+        toC_exp f2
+    | Int i ->
+      fprintf ppf "value %s = { .i_b_u = %d };\n%a"
+        x
+        i
+        toC_exp f2
+    | Unit ->
+      fprintf ppf "value %s = { .i_b_u = 0 };\n%a"
+        x
+        toC_exp f2
+    | Add (y, z) ->
+      fprintf ppf "value %s = { .i_b_u = %s.i_b_u + %s.i_b_u };\n%a"
+        x
+        y
+        z
+        toC_exp f2
+    | Sub (y, z) ->
+      fprintf ppf "value %s = { .i_b_u = %s.i_b_u - %s.i_b_u };\n%a"
+        x
+        y
+        z
+        toC_exp f2
+    | Mul (y, z) ->
+      fprintf ppf "value %s = { .i_b_u = %s.i_b_u * %s.i_b_u };\n%a"
+        x
+        y
+        z
+        toC_exp f2
+    | Div (y, z) ->
+      fprintf ppf "value %s = { .i_b_u = %s.i_b_u / %s.i_b_u };\n%a"
+        x
+        y
+        z
+        toC_exp f2
+    | Mod (y, z) ->
+      fprintf ppf "value %s = { .i_b_u = %s.i_b_u %% %s.i_b_u };\n%a"
+        x
+        y
+        z
+        toC_exp f2
+    | IfEq _ | IfLte _ as f1 ->
+      fprintf ppf "value %s;\n%a%a"
+        x
+        toC_exp (Insert (x, f1))
+        toC_exp f2
+    | AppDir (y, z) ->
+      fprintf ppf "value %s = fun_%s(%s);\n%a"
+        x
+        y
+        z
+        toC_exp f2
+    | AppCls (y, z) ->
+      fprintf ppf "value %s = app(%s, %s);\n%a"
+        x
+        y
+        z
+        toC_exp f2
+    | Cast (y, u1, u2, _, _) ->
+      let c1, c2 = c_of_ty ppf u1, c_of_ty ppf u2 in
+      fprintf ppf "value %s = cast(%s, &%s, &%s);\n%a"
+        x
+        y
+        c1
+        c2
+        toC_exp f2
+    | AppTy _ -> raise @@ ToC_error "toC_exp appty is not available : constraint on polymorphism"
+    | MakeCls _ | MakeClsLabel _ | Let _ -> raise @@ ToC_bug "Let or LetRec appears in f1 on let in toC_exp; maybe closure dose not success"
+    | Insert _ -> raise @@ ToC_bug "Insert appear in f1 on let in toC_exp"
+    end
+  | IfEq (x, y, f1, f2) ->
+    fprintf ppf "if(%s.i_b_u == %s.i_b_u) {\n%a} else {\n%a}\n"
       x
       y
-      x
-  | AppDir (x, y) -> fprintf ppf "%s(%s)" x y
-  | _ -> raise @@ ToC_bug "toC yet"
-
-let rec toC_exp_main ppf f = match f with
-  | Let (x, TyInt, f1, (Let _ | MakeCls _ as f2)) -> 
-    fprintf ppf "\tint %s = %a;\n%a"
-      x
-      toC_exp f1
-      toC_exp_main f2
-  | Let (x, TyInt, f1, f2) ->
-    fprintf ppf "\tint %s = %a;\n\t%a;\n\treturn 0;\n"
-      x
       toC_exp f1
       toC_exp f2
-  | MakeCls (x, _, { entry = _; actual_fv = vs }, (Let _ | MakeCls _ as f)) -> 
-    fprintf ppf "\tcls_%s_t %s_;\n\t%s_.fun = %s;\n%a\n%a"
+  | IfLte (x, y, f1, f2) ->
+    fprintf ppf "if(%s.i_b_u <= %s.i_b_u) {\n%a} else {\n%a}\n"
+      x
+      y
+      toC_exp f1
+      toC_exp f2
+  | MakeCls (x, _, { entry = _; actual_fv = vs }, f) ->
+    fprintf ppf "value %s;\n%s.f.funkind = CLOSURE;\n%s.f.fundat.closure.cls = fun_%s;\nvalue %s_zs[%d] = { %a };\n%s.f.fundat.closure.fvs = %s_zs;\n%a"
       x
       x
       x
       x
-      toC_vs (List.map (fun v -> (v, x)) vs)
-      toC_exp_main f
-  | MakeCls (x, _, { entry = _; actual_fv = vs }, f) -> 
-    fprintf ppf "\tcls_%s_t %s_;\n\t%s_.fun = %s;\n%a\n\t%a;\n\treturn 0;\n"
+      x
+      (List.length vs)
+      toC_vs vs
       x
       x
-      x
-      x
-      toC_vs (List.map (fun v -> (v, x)) vs)
-      toC_exp_main f
-  | _ as f -> toC_exp ppf f
+      toC_exp f
+  | MakeClsLabel (_, _, l, f) ->
+    fprintf ppf "value %s;\n%s.f.funkind = LABEL;\n%s.f.fundat.label = fun_%s;\n%a"
+      l
+      l
+      l
+      l
+      toC_exp f
+  | Var x -> 
+    if !is_main then 
+      fprintf ppf "%s;\nreturn 0;\n" x
+    else 
+      fprintf ppf "return %s;\n" x
+  | Int i -> 
+    if !is_main then 
+      fprintf ppf "value retint = { .i_b_u = %d };\nreturn 0;\n" i
+    else 
+      fprintf ppf "value retint = { .i_b_u = %d };\nreturn retint;\n" i
+  | Unit ->
+    if !is_main then 
+      fprintf ppf "value retint = { .i_b_u = 0 };\nreturn 0;\n"
+    else 
+      fprintf ppf "value retint = { .i_b_u = 0 };\nreturn retint;\n"
+  | Add (x, y) -> 
+    if !is_main then 
+      fprintf ppf "value retint = { .i_b_u = %s.i_b_u + %s.i_b_u };\nreturn 0;\n" x y
+    else 
+      fprintf ppf "value retint = { .i_b_u = %s.i_b_u + %s.i_b_u };\nreturn retint;\n" x y
+  | Sub (x, y) ->
+    if !is_main then 
+      fprintf ppf "value retint = { .i_b_u = %s.i_b_u - %s.i_b_u };\nreturn 0;\n" x y
+    else 
+      fprintf ppf "value retint = { .i_b_u = %s.i_b_u - %s.i_b_u };\nreturn retint;\n" x y
+  | Mul (x, y) -> 
+    if !is_main then 
+      fprintf ppf "value retint = { .i_b_u = %s.i_b_u * %s.i_b_u };\nreturn 0;\n" x y
+    else 
+      fprintf ppf "value retint = { .i_b_u = %s.i_b_u * %s.i_b_u };\nreturn retint;\n" x y
+  | Div (x, y) -> 
+    if !is_main then 
+      fprintf ppf "value retint = { .i_b_u = %s.i_b_u / %s.i_b_u };\nreturn 0;\n" x y
+    else 
+      fprintf ppf "value retint = { .i_b_u = %s.i_b_u / %s.i_b_u };\nreturn retint;\n" x y
+  | Mod (x, y) -> 
+    if !is_main then 
+      fprintf ppf "value retint = { .i_b_u = %s.i_b_u %% %s.i_b_u };\nreturn 0;\n" x y
+    else 
+      fprintf ppf "value retint = { .i_b_u = %s.i_b_u %% %s.i_b_u };\nreturn retint;\n" x y
+  | AppCls (x, y) ->
+    if !is_main then 
+      fprintf ppf "app(%s, %s);\nreturn 0;\n"
+        x
+        y
+    else
+      fprintf ppf "return app(%s, %s);\n"
+        x
+        y
+  | AppDir (x, y) -> 
+    if !is_main then 
+      fprintf ppf "fun_%s(%s);\nreturn 0;\n"
+        x
+        y
+    else
+      fprintf ppf "return fun_%s(%s);\n"
+        x
+        y
+  | Cast (x, u1, u2, _, _) ->
+    let c1, c2 = c_of_ty ppf u1, c_of_ty ppf u2 in
+    if !is_main then 
+      fprintf ppf "cast(%s, &%s, &%s);\nreturn 0;\n"
+        x
+        c1
+        c2
+    else
+      fprintf ppf "return cast(%s, &%s, &%s);\n"
+        x
+        c1
+        c2
+  | Insert (x, f) -> begin match f with
+    | Var y -> 
+      fprintf ppf "%s = %s;\n"
+        x
+        y
+    | Int i -> 
+      fprintf ppf "%s.i_b_u = %d;\n"
+        x
+        i
+    | Unit -> 
+      fprintf ppf "%s.i_b_u = 0;\n"
+        x
+    | Add (y, z) ->
+      fprintf ppf "%s.i_b_u = %s.i_b_u + %s.i_b_u;\n"
+        x
+        y
+        z
+    | Sub (y, z) ->
+      fprintf ppf "%s.i_b_u = %s.i_b_u - %s.i_b_u;\n"
+        x
+        y
+        z
+    | Mul (y, z) ->
+      fprintf ppf "%s.i_b_u = %s.i_b_u * %s.i_b_u;\n"
+        x
+        y
+        z
+    | Div (y, z) ->
+      fprintf ppf "%s.i_b_u = %s.i_b_u / %s.i_b_u;\n"
+        x
+        y
+        z
+    | Mod (y, z) ->
+      fprintf ppf "%s.i_b_u = %s.i_b_u %% %s.i_b_u;\n"
+        x
+        y
+        z
+    | AppTy _ -> raise @@ ToC_error "toC_exp appty is not available : constraint on polymorphism"
+    | AppCls (y, z) | AppDir (y, z) ->
+      fprintf ppf "%s = app(%s, %s);\n"
+        x
+        y
+        z
+    | Cast (y, u1, u2, _, _) ->
+      let c1, c2 = c_of_ty ppf u1, c_of_ty ppf u2 in
+      fprintf ppf "%s = cast(%s, &%s, &%s);\n"
+        x
+        y
+        c1
+        c2
+    | Let (y, u, f1, f2) -> toC_exp ppf (Let (y, u, f1, Insert (x, f2)))
+    | IfEq (y, z, f1, f2) -> toC_exp ppf (IfEq (y, z, Insert (x, f1), Insert (x, f2)))
+    | IfLte (y, z, f1, f2) -> toC_exp ppf (IfLte (y, z, Insert (x, f1), Insert (x, f2)))
+    | MakeCls (y, u, c, f) -> toC_exp ppf (MakeCls (y, u, c, Insert (x, f)))
+    | MakeClsLabel (y, u, l, f) -> toC_exp ppf (MakeClsLabel (y, u, l, Insert (x, f)))
+    | Insert _ -> raise @@ ToC_bug "Insert should not be doubled"
+    end
+  | AppTy _ -> raise @@ ToC_error "toC_exp appty is not available : constraint on polymorphism"
 
 let cnt_fd = ref 0
 
-let toC_fv ppf (x, u) =
-  begin match u with
-    | TyInt ->
-      fprintf ppf "\tint %s = zs[%d];"
-        x
-        !cnt_fd
-    | _ -> raise @@ ToC_bug "toC_fv yet"
-  end;
+let toC_fv ppf (x, _) =
+  fprintf ppf "value %s = zs[%d];"
+    x
+    !cnt_fd;
   cnt_fd := !cnt_fd + 1
 
 let toC_fvs ppf fvl =
   cnt_fd := 0;
   let toC_sep ppf () = fprintf ppf "\n" in
   let toC_list ppf fv = pp_print_list toC_fv ppf fv ~pp_sep:toC_sep in
-  fprintf ppf "%a"
+  fprintf ppf "%a\n"
     toC_list fvl
 
-let toC_fundef ppf { name = (l, ul); arg = (x, ux); formal_fv = fvl; body = f} = 
+let toC_fundef ppf { name = (l, _); arg = (x, _); formal_fv = fvl; body = f} = 
   let num = List.length fvl in
   if num = 0 then
-    match type_of_return ul with
-      | TyInt ->
-        begin match f with
-          | Let _ | MakeCls _ -> 
-            fprintf ppf "int %s(%a %s) {\n%a\n}"
-              l
-              toC_ty ux
-              x
-              toC_exp f
-          | _ -> 
-            fprintf ppf "int %s(%a %s) {\n\treturn %a;\n}"
-              l
-              toC_ty ux
-              x
-              toC_exp f
-        end
-      | _ -> raise @@ ToC_bug "toC_fundef yet"
-  else 
-    match type_of_return ul with
-      | TyInt ->
-        begin match f with
-          | Let _ | MakeCls _ -> 
-            fprintf ppf 
-              "typedef struct cls_%s_t {\n\tint (*fun)(int, int*);\n\tint arg;\n\tint zs[%d];\n} cls_%s_t;\n\nint %s(%a %s, int zs[%d]) {\n%a\n%a\n}"
-              l
-              num
-              l
-              l
-              toC_ty ux
-              x
-              num
-              toC_fvs fvl
-              toC_exp f
-          | _ -> 
-            fprintf ppf 
-            "typedef struct cls_%s_t {\n\tint (*fun)(int, int*);\n\tint arg;\n\tint zs[%d];\n} cls_%s_t;\n\nint %s(%a %s, int zs[%d]) {\n%a\n\treturn %a;\n}"
-              l
-              num
-              l
-              l
-              toC_ty ux
-              x
-              num
-              toC_fvs fvl
-              toC_exp f
-        end
-      | _ -> raise @@ ToC_bug "toC_fundef yet"
+    fprintf ppf "value fun_%s(value %s) {\n%a}"
+      l
+      x
+      toC_exp f
+  else
+    fprintf ppf "value fun_%s(value %s, value zs[%d]) {\n%a%a}"
+      l
+      x
+      num
+      toC_fvs fvl
+      toC_exp f
 
 let toC_fundefs ppf toplevel =
-  let toC_sep ppf () = fprintf ppf "\n\n" in
+  (if List.length toplevel = 0 then pp_print_string ppf ""
+  else let toC_sep ppf () = fprintf ppf "\n\n" in
   let toC_list ppf defs = pp_print_list toC_fundef ppf defs ~pp_sep:toC_sep in
-  fprintf ppf "%a\n\n"
-    toC_list toplevel
+  fprintf ppf "%a\n\n" 
+    toC_list toplevel);
+  is_main := true
 
 let toC_program ppf (Prog (toplevel, f)) = 
   fprintf ppf "%s\n%a%s%a%s"
-    "#include <stdio.h>\n"
+    "#include <stdio.h>\n#include <stdlib.h>\n#include \"cast.h\"\n"
     toC_fundefs toplevel
     "int main() {\n"
-    toC_exp_main f
-    "}"
-  
+    toC_exp f
+    "}";
+  is_main := false; tvset := V.empty

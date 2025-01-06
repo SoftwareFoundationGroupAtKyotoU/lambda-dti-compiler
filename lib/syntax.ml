@@ -258,6 +258,8 @@ module KNorm = struct
 end
 
 module Cls = struct
+  exception Cls_syntax_bug of string
+
   type label = string
 
   let to_label (x:id) = (x:label)
@@ -275,12 +277,15 @@ module Cls = struct
     | Mod of id * id
     | IfEq of id * id * exp * exp
     | IfLte of id * id * exp * exp
-    | MakeCls of id * ty * closure * exp
     | AppTy of id * tyvar list * tyarg list
     | AppCls of id * id
     | AppDir of label * id
     | Cast of id * ty * ty * range * polarity
+    | MakeCls of id * ty * closure * exp
     | Let of id * ty * exp * exp
+    (*以下はC用*)
+    | MakeClsLabel of id * ty * label * exp
+    | Insert of id * exp
 
   type fundef = { name : label * ty; arg : id * ty; formal_fv : (id * ty) list; body : exp }
 
@@ -299,12 +304,14 @@ module Cls = struct
     | Int _ | Unit -> V.empty
     | Add (x, y) | Sub (x, y) | Mul (x, y) | Div (x, y) | Mod (x, y) -> V.of_list [x; y]
     | IfEq (x, y, f1, f2) | IfLte (x, y, f1, f2) -> V.big_union [V.of_list [x; y]; fv f1; fv f2]
-    | MakeCls (x, _, { entry = _; actual_fv = vs }, f) -> V.remove x (V.union (V.of_list vs) (fv f))
     | AppTy (x, _, _) -> V.singleton x
     | AppDir (_, y) -> V.singleton y
     | AppCls (x, y) -> V.of_list [x; y]
     | Cast (x, _, _, _, _) -> V.singleton x
-    | Let (x, _, f1, f2) -> V.union (fv f1) (V.remove x (fv f2))
+    | MakeCls (x, _, { entry = _; actual_fv = vs }, f) -> V.remove x (V.union (V.of_list vs) (fv f))
+    | MakeClsLabel (x, _, _, f) -> V.remove x (fv f)
+    | Let (x, _, c, f) -> V.union (fv c) (V.remove x (fv f))
+    | Insert _ -> raise @@ Cls_syntax_bug "Insert was applied to fv"
 
   type program = Prog of fundef list * exp
 
