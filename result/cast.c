@@ -19,6 +19,8 @@ int blame(ran_pol r_p){
 }
 
 int is_ground(ty t) {
+	ty l;
+	ty r;
 	switch(t.tykind) {
 		case(BASE_INT):
 		case(BASE_BOOL):
@@ -27,8 +29,8 @@ int is_ground(ty t) {
 		break;
 
 		case(TYFUN):
-		ty l = *t.tyfun.left;
-		ty r = *t.tyfun.right;
+		l = *t.tyfun.left;
+		r = *t.tyfun.right;
 		if (l.tykind == DYN && r.tykind == DYN) {
 			return 1;
 		} else {
@@ -43,6 +45,8 @@ int is_ground(ty t) {
 }
 
 ground_ty to_ground(ty t) {
+	ty l;
+	ty r;
 	switch(t.tykind) {
 		case(BASE_INT):
 		return G_INT;
@@ -57,8 +61,8 @@ ground_ty to_ground(ty t) {
 		break;
 
 		case(TYFUN):
-		ty l = *t.tyfun.left;
-		ty r = *t.tyfun.left;
+		l = *t.tyfun.left;
+		r = *t.tyfun.left;
 		if (l.tykind == DYN && r.tykind == DYN) {
 			return G_AR;
 		} else {
@@ -160,19 +164,22 @@ value cast(value x, ty *t1, ty *t2, ran_pol r_p) {			// input = x:t1=>t2
 
 value app(value f, value v) {									// reduction of f(v)
 	value retx;
+	value (*l)(value);
+	value (*c)(value, value*);
+	ran_pol neg_r_p;
 	switch(f.f.funkind) {
 		case(LABEL):												// if f is "label" function
-		value (*l)(value) = f.f.fundat.label;							// R_BETA : return f(v)
+		l = f.f.fundat.label;							// R_BETA : return f(v)
 		retx = l(v);
 		break;
 
 		case(CLOSURE):												// if f is closure
-		value (*c)(value, value*) = f.f.fundat.closure.cls;				// R_BETA : return f(v, fvs)
+		c = f.f.fundat.closure.cls;				// R_BETA : return f(v, fvs)
 		retx = c(v, f.f.fundat.closure.fvs);
 		break;
 
 		case(WRAPPED):												// if f is wrapped function (f = w:U1->U2=>U3->U4)
-		ran_pol neg_r_p = f.f.fundat.wrap.r_p;
+		neg_r_p = f.f.fundat.wrap.r_p;
 		if(neg_r_p.polarity==1){
 			neg_r_p.polarity = 0;
 		} else {

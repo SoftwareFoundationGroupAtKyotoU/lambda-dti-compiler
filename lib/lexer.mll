@@ -28,7 +28,7 @@ let range_of lexbuf =
 
 rule main = parse
   [' ' '\t']+ { main lexbuf }
-| [' ' '\t']* '\n' { Lexing.new_line lexbuf; main lexbuf }
+| [' ' '\t' '\r']* '\n' { Lexing.new_line lexbuf; main lexbuf }
 | "(*" { comment lexbuf; main lexbuf }
 | ['0'-'9']+
   {

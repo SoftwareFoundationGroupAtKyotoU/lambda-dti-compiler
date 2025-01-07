@@ -7,6 +7,8 @@ let debug = ref false
 
 let programs = ref [] (*Stdlibのために、要変更*)
 
+let opt_file = ref None
+
 let compile_process progs (_, tyenv, kfunenvs, _) = 
   (* Used in all modes *)
   let print f = fprintf std_formatter f in
@@ -52,13 +54,12 @@ let compile_process progs (_, tyenv, kfunenvs, _) =
     print_debug "%a\n" Pp.Cls.pp_program p;
 
     print_debug "***** toC *****\n";
-    print_debug "%a\n" ToC.toC_program p
+    let c_code = asprintf "%a" ToC.toC_program p in
+    print_debug "%s\n" c_code; c_code
     
   with
-  | Failure message ->
-    print "Failure: %s\n" message;
-  | Typing.Type_error message ->
-    print "Type_error in compilation: %s\n" message
+  | Failure message -> print "Failure: %s\n" message; asprintf "Failure: %s" message
+  | Typing.Type_error message -> print "Type_error in compilation: %s\n" message; asprintf "Failure: %s" message
   end
 
 let rec read_eval_print lexbuf env tyenv kfunenvs kenv =
@@ -117,14 +118,37 @@ let rec read_eval_print lexbuf env tyenv kfunenvs kenv =
         pp_print_string kx
         Pp.pp_ty2 ku
         Pp.KNorm.pp_value kv;*)
-        
-      match e with
-        | Syntax.ITGL.Exp _ -> 
-          compile_process !programs Stdlib.pervasives;
-          programs := [];
-          read_eval_print lexbuf env (*new_*)tyenv kfunenvs kenv
-        | _ -> 
-          read_eval_print lexbuf env (*new_*)tyenv kfunenvs kenv
+
+      match e, !opt_file with
+        | Syntax.ITGL.Exp _, None -> 
+            let c_code = compile_process !programs Stdlib.pervasives in
+            programs := [];
+            let oc = open_out "result/stdout.c" in
+            Printf.fprintf oc "%s" c_code;
+            close_out oc;
+            let _ = Sys.command "gcc result/stdout.c result/cast.c -o result/stdout" in
+            let _ = Sys.command "result/stdout" in
+            print "\n";
+            read_eval_print lexbuf env (*new_*)tyenv kfunenvs kenv
+        | _, None -> read_eval_print lexbuf env (*new_*)tyenv kfunenvs kenv
+        | Syntax.ITGL.Exp _, Some f -> 
+            let c_code = compile_process !programs Stdlib.pervasives in
+            programs := [];
+            let oc = open_out ("../result/"^f^"_out.c") in
+            Printf.fprintf oc "%s" c_code;
+            close_out oc;
+            let _ = Sys.command ("gcc ../result/"^f^"_out.c ../result/cast.c -o ../result/"^f) in
+            let _ = Sys.command ("../result/"^f) in
+            print "\n"
+        | _, _ -> read_eval_print lexbuf env (*new_*)tyenv kfunenvs kenv
+        (*| _, Some f ->
+            if lexbuf.lex_eof_reached then
+              let c_code = compile_process !programs Stdlib.pervasives in
+              let oc = open_out ("../result/"^f^"_out.c") in
+              Printf.fprintf oc "%s" c_code;
+              close_out oc
+            else 
+              read_eval_print lexbuf env (*new_*)tyenv kfunenvs kenv*)
     with
     | Failure message ->
       print "Failure: %s\n" message;
@@ -148,10 +172,13 @@ let rec read_eval_print lexbuf env tyenv kfunenvs kenv =
     | ToC.ToC_error message ->
       print "%s\n" message
   end;
-  read_eval_print lexbuf env tyenv kfunenvs kenv
+  (match !opt_file with
+    | None -> read_eval_print lexbuf env tyenv kfunenvs kenv
+    | Some _ ->())
 
 let start file =
   let print_debug f = Utils.Format.make_print_debug !debug f in
+  opt_file := file;
   print_debug "***** Lexer *****\n";
   let channel, lexbuf = match file with
     | None ->
