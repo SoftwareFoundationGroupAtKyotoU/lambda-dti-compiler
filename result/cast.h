@@ -1,6 +1,15 @@
 #ifndef CAST_H
 #define CAST_H
 
+typedef struct ran_pol {
+	char *filename;
+	int startline;
+	int startchr;
+	int endline;
+	int endchr;
+	int polarity;
+} ran_pol;
+
 typedef union value value;
 
 typedef enum ground_ty {
@@ -13,6 +22,7 @@ typedef enum ground_ty {
 typedef struct dyn {
 	value *v;
 	ground_ty g;
+	ran_pol r_p;
 } dyn;
 
 typedef struct ty ty;
@@ -52,6 +62,7 @@ typedef struct fun {
 			ty *u2;
 			ty *u3;
 			ty *u4;
+			ran_pol r_p;
 		} wrap;
 	} fundat;
 } fun;
@@ -62,7 +73,7 @@ typedef union value {
 	fun f;
 } value;
 
-value cast(value, ty*, ty*);
+value cast(value, ty*, ty*, ran_pol);
 
 value app(value, value);
 

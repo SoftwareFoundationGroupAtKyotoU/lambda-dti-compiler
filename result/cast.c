@@ -8,7 +8,17 @@ ty tybool = { .tykind = BASE_BOOL };
 ty tyunit = { .tykind = BASE_UNIT };
 ty tyar = { .tykind = TYFUN, .tyfun = { .left = &tydyn, .right = &tydyn } };
 
-int is_ground(ty t){
+int blame(ran_pol r_p){
+	if(r_p.polarity==1) {
+		printf("Blame on the expression side:\n");
+	} else {
+		printf("Blame on the environment side:\n");
+	}
+	printf("%sline %d, character %d -- line %d, character %d\n", r_p.filename, r_p.startline, r_p.startchr, r_p.endline, r_p.endchr);
+	return 0;
+}
+
+int is_ground(ty t) {
 	switch(t.tykind) {
 		case(BASE_INT):
 		case(BASE_BOOL):
@@ -32,7 +42,7 @@ int is_ground(ty t){
 	}
 }
 
-ground_ty to_ground(ty t){
+ground_ty to_ground(ty t) {
 	switch(t.tykind) {
 		case(BASE_INT):
 		return G_INT;
@@ -59,7 +69,7 @@ ground_ty to_ground(ty t){
 	}
 }
 
-value cast(value x, ty *t1, ty *t2) {							// input = x:t1=>t2
+value cast(value x, ty *t1, ty *t2, ran_pol r_p) {			// input = x:t1=>t2
 	value retx;
 	if (t1->tykind == TYFUN && t2->tykind == TYFUN) { 				// when t1 and t2 are function type
 		printf("defined as a wrapped function\n");						// define x:U1->U2=>U3->U4 as wrapped function
@@ -69,12 +79,14 @@ value cast(value x, ty *t1, ty *t2) {							// input = x:t1=>t2
 		retx.f.fundat.wrap.u2 = t1->tyfun.right;
 		retx.f.fundat.wrap.u3 = t2->tyfun.left;
 		retx.f.fundat.wrap.u4 = t2->tyfun.right;
+		retx.f.fundat.wrap.r_p = r_p;
 		retx.f.funkind = WRAPPED;
 	} else if (is_ground(*t1) == 1 && t2->tykind == DYN) {			// when t1 is ground and t2 is ?
 		printf("defined as a dyn value\n");								// define x:G=>? as dynamic type value
 		retx.d.v = (value*)malloc(sizeof(value));
 		*retx.d.v = x;
 		retx.d.g = to_ground(*t1);
+		retx.d.r_p = r_p;
 	} else if (t1->tykind == DYN && t2->tykind == DYN) {			// when t1 and t2 are ?
 		printf ("ID STAR\n");											// R_IDSTAR (x:?=>? -> x)
 		retx.d = x.d;
@@ -95,6 +107,7 @@ value cast(value x, ty *t1, ty *t2) {							// input = x:t1=>t2
 			retx = *x.d.v;
 		} else if (t != t_) {											// when t1's injection ground type dosen't equal t2
 			printf("cast fail\n");											// E_FAIL (x':G1=>?=>G2 if G1<>G2 -> blame)
+			blame(r_p);
 			abort();
 		} else {
 			printf("cannot reachable\n");
@@ -102,12 +115,12 @@ value cast(value x, ty *t1, ty *t2) {							// input = x:t1=>t2
 		}
 	} else if (t1->tykind == TYFUN && t2->tykind == DYN) {			// when t1 is function type and t2 is ?
 		printf("cast ground\n");
-		value x_ = cast(x, t1, &tyar);									// R_GROUND (x:U=>? -> x:U=>G=>U)
-		retx = cast(x_, &tyar, t2);
+		value x_ = cast(x, t1, &tyar, r_p);									// R_GROUND (x:U=>? -> x:U=>G=>U)
+		retx = cast(x_, &tyar, t2, r_p);
 	} else if (t1->tykind == DYN && t2->tykind == TYFUN) {			// when t1 is ? and t2 is function type
 		printf("cast expand\n");
-		value x_ = cast(x, t1, &tyar);									// R_EXPAND (x:?=>U -> x:?=>G=>U)
-		retx = cast(x_, &tyar, t2); 
+		value x_ = cast(x, t1, &tyar, r_p);									// R_EXPAND (x:?=>U -> x:?=>G=>U)
+		retx = cast(x_, &tyar, t2, r_p); 
 	} else if (t1->tykind == DYN && t2->tykind == TYVAR){			// when t1 is ? and t2 is type variable
 		switch(x.d.g){
 			case(G_INT):												// when t1's injection ground type is int
@@ -135,7 +148,7 @@ value cast(value x, ty *t1, ty *t2) {							// input = x:t1=>t2
 			t2->tyfun.right = (ty*)malloc(sizeof(ty));
 			t2->tyfun.left->tykind = TYVAR;
 			t2->tyfun.right->tykind = TYVAR;
-			retx = cast(*x.d.v, &tyar, t2);
+			retx = cast(*x.d.v, &tyar, t2, r_p);
 			break;
 		}
 	} else {
@@ -159,11 +172,17 @@ value app(value f, value v) {									// reduction of f(v)
 		break;
 
 		case(WRAPPED):												// if f is wrapped function (f = w:U1->U2=>U3->U4)
+		ran_pol neg_r_p = f.f.fundat.wrap.r_p;
+		if(neg_r_p.polarity==1){
+			neg_r_p.polarity = 0;
+		} else {
+			neg_r_p.polarity = 1;
+		}
 		value f1;														// R_APPCAST : return (w(v:U3=>U1)):U2=>U4
 		f1.f = *f.f.fundat.wrap.w;
-		value v_ = cast(v, f.f.fundat.wrap.u3, f.f.fundat.wrap.u1);
+		value v_ = cast(v, f.f.fundat.wrap.u3, f.f.fundat.wrap.u1, neg_r_p);
 		value v__ = app(f1, v_);
-		retx = cast(v__, f.f.fundat.wrap.u2, f.f.fundat.wrap.u4);
+		retx = cast(v__, f.f.fundat.wrap.u2, f.f.fundat.wrap.u4, f.f.fundat.wrap.r_p);
 		break;
 	}
 	return retx;

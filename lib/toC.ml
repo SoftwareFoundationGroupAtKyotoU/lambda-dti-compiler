@@ -102,13 +102,21 @@ let rec toC_exp ppf f = match f with
         y
         z
         toC_exp f2
-    | Cast (y, u1, u2, _, _) ->
+    | Cast (y, u1, u2, r, p) ->
       let c1, c2 = c_of_ty ppf u1, c_of_ty ppf u2 in
-      fprintf ppf "value %s = cast(%s, &%s, &%s);\n%a"
+      fprintf ppf "ran_pol %s_p_r = { .filename = %s, .startline = %d, .startchr = %d, .endline = %d, .endchr = %d, .polarity = %d};\nvalue %s = cast(%s, &%s, &%s, %s_p_r);\n%a"
+        x
+        (if r.start_p.pos_fname <> "" then "File \""^r.start_p.pos_fname^"\", " else "\"\"")
+        r.start_p.pos_lnum
+        (r.start_p.pos_cnum - r.start_p.pos_bol)
+        r.end_p.pos_lnum
+        (r.end_p.pos_cnum - r.end_p.pos_bol)
+        (match p with Pos -> 1 | Neg -> 0)
         x
         y
         c1
         c2
+        x
         toC_exp f2
     | AppTy _ -> raise @@ ToC_error "toC_exp appty is not available : constraint on polymorphism"
     | MakeCls _ | MakeClsLabel _ | Let _ -> raise @@ ToC_bug "Let or LetRec appears in f1 on let in toC_exp; maybe closure dose not success"
