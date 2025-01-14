@@ -146,8 +146,7 @@ let rec toC_exp ppf f = match f with
       toC_exp f1
       toC_exp f2
   | MakeCls (x, _, { entry = _; actual_fv = vs }, f) ->
-    fprintf ppf "value %s;\n%s.f.funkind = CLOSURE;\n%s.f.fundat.closure.cls = fun_%s;\n%s.f.fundat.closure.fvs = (value*)malloc(sizeof(value) * %d);\n%a\n%a"
-      x
+    fprintf ppf "%s.f.funkind = CLOSURE;\n%s.f.fundat.closure.cls = fun_%s;\n%s.f.fundat.closure.fvs = (value*)malloc(sizeof(value) * %d);\n%a\n%a"
       x
       x
       x
@@ -156,8 +155,7 @@ let rec toC_exp ppf f = match f with
       toC_vs (x, vs)
       toC_exp f
   | MakeClsLabel (_, _, l, f) ->
-    fprintf ppf "value %s;\n%s.f.funkind = LABEL;\n%s.f.fundat.label = fun_%s;\n%a"
-      l
+    fprintf ppf "%s.f.funkind = LABEL;\n%s.f.fundat.label = fun_%s;\n%a"
       l
       l
       l
@@ -315,6 +313,17 @@ let rec toC_exp ppf f = match f with
     end
   | AppTy _ -> raise @@ ToC_error "toC_exp appty is not available : constraint on polymorphism"
 
+let toC_label ppf { name = (l, _); arg = (_, _); formal_fv = fvl; body = _} = 
+  let num = List.length fvl in
+  if num = 0 then
+    fprintf ppf "value fun_%s(value);value %s;"
+      l
+      l
+  else
+    fprintf ppf "value fun_%s(value, value*);\nvalue %s;"
+      l
+      l
+
 let cnt_fd = ref 0
 
 let toC_fv ppf (x, _) =
@@ -344,15 +353,6 @@ let toC_fundef ppf { name = (l, _); arg = (x, _); formal_fv = fvl; body = f} =
       num
       toC_fvs fvl
       toC_exp f
-
-let toC_label ppf { name = (l, _); arg = (_, _); formal_fv = fvl; body = _} = 
-  let num = List.length fvl in
-  if num = 0 then
-    fprintf ppf "value fun_%s(value);"
-      l
-  else
-    fprintf ppf "value fun_%s(value, value*);"
-      l
 
 let toC_fundefs ppf toplevel =
   (if List.length toplevel = 0 then pp_print_string ppf ""
