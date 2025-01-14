@@ -1,9 +1,11 @@
 ldti adder.ml
 ldti adder2.ml
 ldti cast-abort.ml
+ldti cls-bug.ml
 ldti cls-rec.ml
 ldti even-odd.ml
 ldti fib.ml
+ldti funcomp.ml
 ldti gcd.ml
 ldti non-tail-if.ml
 ldti print.ml
