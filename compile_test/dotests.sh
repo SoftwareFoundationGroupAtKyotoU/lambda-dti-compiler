@@ -7,6 +7,10 @@ ldti even-odd.ml
 ldti fib.ml
 ldti funcomp.ml
 ldti gcd.ml
+ldti join-reg.ml
+ldti join-reg2.ml
+ldti join-stack.ml
+ldti join-stack2.ml
 ldti non-tail-if.ml
 ldti print.ml
 ldti shuffle.ml

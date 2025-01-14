@@ -7,8 +7,11 @@
 *.cmx
 *.cmxs
 *.cmxa
-result/*.exe
-result/*.out
+result/*
+result_C/*
+result_old/*
+!result/.gitkeep
+!result_C/.gitkeep
 
 # ocamlbuild working directory
 _build/

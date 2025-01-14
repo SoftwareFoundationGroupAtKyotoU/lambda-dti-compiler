@@ -367,7 +367,7 @@ let toC_fundefs ppf toplevel =
 
 let toC_program ppf (Prog (toplevel, f)) = 
   fprintf ppf "%s\n%a%s%a%s"
-    "#include <stdio.h>\n#include <stdlib.h>\n#include \"cast.h\"\n"
+    "#include <stdlib.h>\n#include \"../lib/cast.h\"\n"
     toC_fundefs toplevel
     "int main() {\n"
     toC_exp f

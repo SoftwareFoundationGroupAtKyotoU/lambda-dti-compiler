@@ -123,22 +123,22 @@ let rec read_eval_print lexbuf env tyenv kfunenvs kenv =
         | Syntax.ITGL.Exp _, None -> 
             let c_code = compile_process !programs Stdlib.pervasives in
             programs := [];
-            let oc = open_out "result/stdout.c" in
+            let oc = open_out "result_C/stdout.c" in
             Printf.fprintf oc "%s" c_code;
             close_out oc;
-            let _ = Sys.command "gcc result/stdout.c result/cast.c -o result/stdout" in
-            let _ = Sys.command "result/stdout" in
+            let _ = Sys.command "gcc result_C/stdout.c lib/cast.c -o result/stdout.out" in
+            let _ = Sys.command "result/stdout.out" in
             print "\n";
             read_eval_print lexbuf env (*new_*)tyenv kfunenvs kenv
         | _, None -> read_eval_print lexbuf env (*new_*)tyenv kfunenvs kenv
         | Syntax.ITGL.Exp _, Some f -> 
             let c_code = compile_process !programs Stdlib.pervasives in
             programs := [];
-            let oc = open_out ("../result/"^f^"_out.c") in
+            let oc = open_out ("../result_C/"^f^"_out.c") in
             Printf.fprintf oc "%s" c_code;
             close_out oc;
-            let _ = Sys.command ("gcc ../result/"^f^"_out.c ../result/cast.c -o ../result/"^f) in
-            let _ = Sys.command ("../result/"^f) in
+            let _ = Sys.command ("gcc ../result_C/"^f^"_out.c ../lib/cast.c -o ../result/"^f^".out") in
+            let _ = Sys.command ("../result/"^f^".out") in
             print "\n"
         | _, _ -> read_eval_print lexbuf env (*new_*)tyenv kfunenvs kenv
         (*| _, Some f ->
