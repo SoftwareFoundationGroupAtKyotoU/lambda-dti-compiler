@@ -101,13 +101,27 @@ module CC = struct
       | _ -> k_normalize_exp tyenv (IfExp (r, f, BConst (r, true), BConst (r, false)))
       end
     | IfExp (_, f1, f2, f3) ->
-      let fu11, fu12, op_b, ord_b = cond_if tyenv f1 in
       let f2', u2 = k_normalize_exp tyenv f2 in
       let f3', u3 = k_normalize_exp tyenv f3 in
-      let former, later = if ord_b then f2', f3' else f3', f2' in
       let u = Typing.meet u2 u3 in
-      if op_b then insert_let fu11 (fun x -> (insert_let fu12 (fun y -> KNorm.IfEqExp (x, y, former, later), u)))
-      else insert_let fu11 (fun x -> (insert_let fu12 (fun y -> KNorm.IfLteExp (x, y, former, later), u)))
+      begin match f1 with
+        | BinOp (_, op, f1, f2) -> 
+          let fu1 = k_normalize_exp tyenv f1 in
+          let fu2 = k_normalize_exp tyenv f2 in
+          begin match op with
+            | Eq -> insert_let fu1 (fun x -> insert_let fu2 (fun y -> IfEqExp (x, y, f2', f3'), u))
+            | Neq -> insert_let fu1 (fun x -> insert_let fu2 (fun y -> IfEqExp (x, y, f3', f2'), u))
+            | Lt -> insert_let fu1 (fun x -> insert_let fu2 (fun y -> IfLteExp (x, y, IfEqExp (x, y, f3', f2'), f3'), u))
+            | Lte -> insert_let fu1 (fun x -> insert_let fu2 (fun y -> IfLteExp (x, y, f2', f3'), u))
+            | Gt -> insert_let fu1 (fun x -> insert_let fu2 (fun y -> IfLteExp (x, y, f3', f2'), u))
+            | Gte -> insert_let fu1 (fun x -> insert_let fu2 (fun y -> IfLteExp (x, y, IfEqExp (x, y, f2', f3'), f2'), u))
+            | _ -> raise @@ KNormal_bug "if-cond type should bool"
+          end
+        | Var _ | BConst _ | IfExp _ | AppExp _ | LetExp _ | CastExp _ as f ->
+          let fu = k_normalize_exp tyenv f in 
+          insert_let fu (fun x -> insert_let (KNorm.IConst 1, TyBool) (fun y -> IfEqExp (x, y, f2', f3'), u))
+        | IConst _ | UConst _ | FunExp _ | FixExp _ -> raise @@ KNormal_bug "if-cond type should bool"
+      end
     | FunExp (_, x, u, f) -> 
       let tent_var = genvar "_var" in
       let f, u' = k_normalize_exp (Environment.add x (TyScheme ([], u)) tyenv) f in
@@ -134,29 +148,12 @@ module CC = struct
           assert (x' = x);
           let f1, u1 = k_normalize_exp (Environment.add y (TyScheme ([], u)) (Environment.add x' (TyScheme ([], TyFun (u, u'))) tyenv)) f1 in
           let f2, u2 = k_normalize_exp (Environment.add x (TyScheme (tvs, TyFun (u, u1))) tyenv) f2 in
-          KNorm.LetRecExp (x, TyFun (u, u1), (y, u'), f1, f2), u2
+          KNorm.LetRecExp (x, TyFun (u, u1), (y, u), f1, f2), u2
         | _ as f ->
           let f1, u1 = k_normalize_exp tyenv f in
           let f2, u2 = k_normalize_exp (Environment.add x (TyScheme (tvs, u1)) tyenv) f2 in
           KNorm.LetExp (x, u1, f1, f2), u2
       end
-  and cond_if tyenv = function
-    | BinOp (r, op, f1, f2) -> 
-      let fu1 = k_normalize_exp tyenv f1 in
-      let fu2 = k_normalize_exp tyenv f2 in
-      begin match op with
-        | Eq -> fu1, fu2, true, true
-        | Neq -> fu1, fu2, true, false
-        | Lt -> cond_if tyenv (IfExp (r, BinOp (r, Lte, f1, f2), IfExp (r, BinOp (r, Eq, f1, f2), BConst (r, false), BConst (r, true)), BConst (r, false)))
-        | Lte -> fu1, fu2, false, true
-        | Gt -> fu1, fu2, false, false
-        | Gte -> cond_if tyenv (IfExp (r, BinOp (r, Lte, f1, f2), IfExp (r, BinOp (r, Eq, f1, f2), BConst (r, true), BConst (r, false)), BConst (r, true)))
-        | _ -> raise @@ KNormal_bug "if-cond type should bool"
-      end
-    | Var _ | BConst _ | IfExp _ | AppExp _ | LetExp _ | CastExp _ as f ->
-      let fu = k_normalize_exp tyenv f in 
-      fu, (KNorm.IConst 1, TyBool), true, true
-    | IConst _ | UConst _ | FunExp _ | FixExp _ -> raise @@ KNormal_bug "if-cond type should bool"
 
   let k_normalize_program ktyenv = function
     | Exp f -> let f, u = k_normalize_exp ktyenv f in KNorm.Exp f, u, ktyenv

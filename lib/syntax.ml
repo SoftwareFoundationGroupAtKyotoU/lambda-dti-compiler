@@ -278,10 +278,10 @@ module Cls = struct
     | IfEq of id * id * exp * exp
     | IfLte of id * id * exp * exp
     | AppTy of id * tyvar list * tyarg list
+    | MakeCls of id * ty * closure * exp
     | AppCls of id * id
     | AppDir of label * id
     | Cast of id * ty * ty * range * polarity
-    | MakeCls of id * ty * closure * exp
     | Let of id * ty * exp * exp
     (*以下はC用*)
     | MakeClsLabel of id * ty * label * exp

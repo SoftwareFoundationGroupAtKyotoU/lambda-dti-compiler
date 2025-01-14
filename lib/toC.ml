@@ -10,32 +10,43 @@ let is_main = ref false
 let tvset = ref V.empty
 
 let rec c_of_ty ppf = function
-  | TyInt -> "tyint"
-  | TyBool -> "tybool"
-  | TyUnit -> "tyunit"
-  | TyDyn -> "tydyn"
-  | TyFun (TyDyn, TyDyn) -> "tyar"
+  | TyInt -> "&tyint"
+  | TyBool -> "&tybool"
+  | TyUnit -> "&tyunit"
+  | TyDyn -> "&tydyn"
+  | TyFun (TyDyn, TyDyn) -> "&tyar"
   | TyFun (u1, u2) -> 
     let c1, c2 = c_of_ty ppf u1, c_of_ty ppf u2 in 
     let v = KNormal.genvar "_tyfun" in
-    (fprintf ppf "ty %s = { .tykind = TYFUN, .tyfun = { .left = &%s, .right = &%s } };\n"
+    (fprintf ppf "ty %s = { .tykind = TYFUN, .tyfun = { .left = %s, .right = %s } };\n"
       v
       c1
       c2);
-    v
+    ("&"^v)
   | TyVar (i, _) -> 
     let strtv = "_tv" ^ string_of_int i in
     try 
       V.find strtv !tvset 
     with Not_found -> 
       tvset := V.add strtv !tvset;
-      (fprintf ppf "ty %s = { .tykind = TYVAR };\n"
+      (fprintf ppf "ty *%s = (ty*)malloc(sizeof(ty));\n%s->tykind = TYVAR;\n"
+        strtv
         strtv);
       strtv
 
-let toC_vs ppf vs =
-  let toC_sep ppf () = fprintf ppf ", " in
-  let toC_list ppf v = pp_print_list pp_print_string ppf v ~pp_sep:toC_sep in
+let cnt_v = ref 0
+
+let toC_v x ppf v =
+  fprintf ppf "%s.f.fundat.closure.fvs[%d] = %s;"
+    x
+    !cnt_v
+    v;
+  cnt_v := !cnt_v + 1
+
+let toC_vs ppf (x, vs) =
+  cnt_v := 0;
+  let toC_sep ppf () = fprintf ppf "\n" in
+  let toC_list ppf fv = pp_print_list (toC_v x) ppf fv ~pp_sep:toC_sep in
   fprintf ppf "%a"
     toC_list vs
 
@@ -104,9 +115,9 @@ let rec toC_exp ppf f = match f with
         toC_exp f2
     | Cast (y, u1, u2, r, p) ->
       let c1, c2 = c_of_ty ppf u1, c_of_ty ppf u2 in
-      fprintf ppf "ran_pol %s_p_r = { .filename = %s, .startline = %d, .startchr = %d, .endline = %d, .endchr = %d, .polarity = %d};\nvalue %s = cast(%s, &%s, &%s, %s_p_r);\n%a"
-        x
-        (if r.start_p.pos_fname <> "" then "File \""^r.start_p.pos_fname^"\", " else "\"\"")
+      fprintf ppf "ran_pol %s_p_r = { .filename = %s, .startline = %d, .startchr = %d, .endline = %d, .endchr = %d, .polarity = %d};\nvalue %s = cast(%s, %s, %s, %s_p_r);\n%a"
+        y
+        (if r.start_p.pos_fname <> "" then "\"File \\\""^r.start_p.pos_fname^"\\\", \"" else "\"\"")
         r.start_p.pos_lnum
         (r.start_p.pos_cnum - r.start_p.pos_bol)
         r.end_p.pos_lnum
@@ -116,7 +127,7 @@ let rec toC_exp ppf f = match f with
         y
         c1
         c2
-        x
+        y
         toC_exp f2
     | AppTy _ -> raise @@ ToC_error "toC_exp appty is not available : constraint on polymorphism"
     | MakeCls _ | MakeClsLabel _ | Let _ -> raise @@ ToC_bug "Let or LetRec appears in f1 on let in toC_exp; maybe closure dose not success"
@@ -135,16 +146,14 @@ let rec toC_exp ppf f = match f with
       toC_exp f1
       toC_exp f2
   | MakeCls (x, _, { entry = _; actual_fv = vs }, f) ->
-    fprintf ppf "value %s;\n%s.f.funkind = CLOSURE;\n%s.f.fundat.closure.cls = fun_%s;\nvalue %s_zs[%d] = { %a };\n%s.f.fundat.closure.fvs = %s_zs;\n%a"
+    fprintf ppf "value %s;\n%s.f.funkind = CLOSURE;\n%s.f.fundat.closure.cls = fun_%s;\n%s.f.fundat.closure.fvs = (value*)malloc(sizeof(value) * %d);\n%a\n%a"
       x
       x
       x
       x
       x
       (List.length vs)
-      toC_vs vs
-      x
-      x
+      toC_vs (x, vs)
       toC_exp f
   | MakeClsLabel (_, _, l, f) ->
     fprintf ppf "value %s;\n%s.f.funkind = LABEL;\n%s.f.fundat.label = fun_%s;\n%a"
@@ -211,18 +220,34 @@ let rec toC_exp ppf f = match f with
       fprintf ppf "return fun_%s(%s);\n"
         x
         y
-  | Cast (x, u1, u2, _, _) ->
+  | Cast (x, u1, u2, r, p) ->
     let c1, c2 = c_of_ty ppf u1, c_of_ty ppf u2 in
     if !is_main then 
-      fprintf ppf "cast(%s, &%s, &%s);\nreturn 0;\n"
+      fprintf ppf "ran_pol %s_p_r = { .filename = %s, .startline = %d, .startchr = %d, .endline = %d, .endchr = %d, .polarity = %d};\ncast(%s, %s, %s, %s_p_r);\nreturn 0;\n"
+        x
+        (if r.start_p.pos_fname <> "" then "\"File \\\""^r.start_p.pos_fname^"\\\", \"" else "\"\"")
+        r.start_p.pos_lnum
+        (r.start_p.pos_cnum - r.start_p.pos_bol)
+        r.end_p.pos_lnum
+        (r.end_p.pos_cnum - r.end_p.pos_bol)
+        (match p with Pos -> 1 | Neg -> 0)
         x
         c1
         c2
+        x
     else
-      fprintf ppf "return cast(%s, &%s, &%s);\n"
+      fprintf ppf "ran_pol %s_p_r = { .filename = %s, .startline = %d, .startchr = %d, .endline = %d, .endchr = %d, .polarity = %d};\nreturn cast(%s, %s, %s, %s_p_r);\n"
+        x
+        (if r.start_p.pos_fname <> "" then "\"File \\\""^r.start_p.pos_fname^"\\\", \"" else "\"\"")
+        r.start_p.pos_lnum
+        (r.start_p.pos_cnum - r.start_p.pos_bol)
+        r.end_p.pos_lnum
+        (r.end_p.pos_cnum - r.end_p.pos_bol)
+        (match p with Pos -> 1 | Neg -> 0)
         x
         c1
         c2
+        x
   | Insert (x, f) -> begin match f with
     | Var y -> 
       fprintf ppf "%s = %s;\n"
@@ -266,13 +291,21 @@ let rec toC_exp ppf f = match f with
         x
         y
         z
-    | Cast (y, u1, u2, _, _) ->
+    | Cast (y, u1, u2, r, p) ->
       let c1, c2 = c_of_ty ppf u1, c_of_ty ppf u2 in
-      fprintf ppf "%s = cast(%s, &%s, &%s);\n"
+      fprintf ppf "ran_pol %s_p_r = { .filename = %s, .startline = %d, .startchr = %d, .endline = %d, .endchr = %d, .polarity = %d};\n%s = cast(%s, %s, %s, %s_p_r);\n"
         x
+        (if r.start_p.pos_fname <> "" then "\"File \\\""^r.start_p.pos_fname^"\\\", \"" else "\"\"")
+        r.start_p.pos_lnum
+        (r.start_p.pos_cnum - r.start_p.pos_bol)
+        r.end_p.pos_lnum
+        (r.end_p.pos_cnum - r.end_p.pos_bol)
+        (match p with Pos -> 1 | Neg -> 0)
         y
+        x
         c1
         c2
+        x
     | Let (y, u, f1, f2) -> toC_exp ppf (Let (y, u, f1, Insert (x, f2)))
     | IfEq (y, z, f1, f2) -> toC_exp ppf (IfEq (y, z, Insert (x, f1), Insert (x, f2)))
     | IfLte (y, z, f1, f2) -> toC_exp ppf (IfLte (y, z, Insert (x, f1), Insert (x, f2)))
@@ -312,9 +345,21 @@ let toC_fundef ppf { name = (l, _); arg = (x, _); formal_fv = fvl; body = f} =
       toC_fvs fvl
       toC_exp f
 
+let toC_label ppf { name = (l, _); arg = (_, _); formal_fv = fvl; body = _} = 
+  let num = List.length fvl in
+  if num = 0 then
+    fprintf ppf "value fun_%s(value);"
+      l
+  else
+    fprintf ppf "value fun_%s(value, value*);"
+      l
+
 let toC_fundefs ppf toplevel =
   (if List.length toplevel = 0 then pp_print_string ppf ""
   else let toC_sep ppf () = fprintf ppf "\n\n" in
+  let toC_list ppf labels = pp_print_list toC_label ppf labels ~pp_sep:toC_sep in
+  fprintf ppf "%a\n\n"
+    toC_list toplevel;
   let toC_list ppf defs = pp_print_list toC_fundef ppf defs ~pp_sep:toC_sep in
   fprintf ppf "%a\n\n" 
     toC_list toplevel);

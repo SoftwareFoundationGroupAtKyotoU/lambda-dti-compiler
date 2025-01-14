@@ -11,7 +11,7 @@ let opt_file = ref None
 
 let compile_process progs (_, tyenv, kfunenvs, _) = 
   (* Used in all modes *)
-  let print f = fprintf std_formatter f in
+  (*let print f = fprintf std_formatter f in*)
   (* Used in debug mode *)
   let print_debug f = Utils.Format.make_print_debug !debug f in
   let rec to_exp ps = match ps with
@@ -58,8 +58,8 @@ let compile_process progs (_, tyenv, kfunenvs, _) =
     print_debug "%s\n" c_code; c_code
     
   with
-  | Failure message -> print "Failure: %s\n" message; asprintf "Failure: %s" message
-  | Typing.Type_error message -> print "Type_error in compilation: %s\n" message; asprintf "Failure: %s" message
+  | Failure message -> raise @@ Failure message
+  | Typing.Type_error message -> raise @@ Typing.Type_error message
   end
 
 let rec read_eval_print lexbuf env tyenv kfunenvs kenv =
@@ -173,7 +173,7 @@ let rec read_eval_print lexbuf env tyenv kfunenvs kenv =
       print "%s\n" message
   end;
   (match !opt_file with
-    | None -> read_eval_print lexbuf env tyenv kfunenvs kenv
+    | None -> programs := []; read_eval_print lexbuf env tyenv kfunenvs kenv
     | Some _ ->())
 
 let start file =

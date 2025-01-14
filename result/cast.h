@@ -73,7 +73,7 @@ typedef union value {
 	fun f;
 } value;
 
-value cast(value, ty*, ty*, ran_pol);
+value cast(value, ty*, ty*, ran_pol);//ポインタに変えよう
 
 value app(value, value);
 
