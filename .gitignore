@@ -10,6 +10,7 @@
 result/*
 result_C/*
 result_old/*
+result_old2/*
 !result/.gitkeep
 !result_C/.gitkeep
 

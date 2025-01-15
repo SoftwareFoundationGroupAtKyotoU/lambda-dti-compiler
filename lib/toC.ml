@@ -284,7 +284,12 @@ let rec toC_exp ppf f = match f with
         y
         z
     | AppTy _ -> raise @@ ToC_error "toC_exp appty is not available : constraint on polymorphism"
-    | AppCls (y, z) | AppDir (y, z) ->
+    | AppDir (y, z) ->
+      fprintf ppf "%s = fun_%s(%s);\n"
+        x
+        y
+        z
+    | AppCls (y, z) ->
       fprintf ppf "%s = app(%s, %s);\n"
         x
         y
@@ -316,7 +321,7 @@ let rec toC_exp ppf f = match f with
 let toC_label ppf { name = (l, _); arg = (_, _); formal_fv = fvl; body = _} = 
   let num = List.length fvl in
   if num = 0 then
-    fprintf ppf "value fun_%s(value);value %s;"
+    fprintf ppf "value fun_%s(value);\nvalue %s;"
       l
       l
   else
