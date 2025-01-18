@@ -69,8 +69,8 @@ typedef struct fun {
 
 typedef union value {
 	int i_b_u;
-	dyn d;
-	fun f;
+	dyn *d;
+	fun *f;
 } value;
 
 value cast(value, ty*, ty*, ran_pol);//ポインタに変えよう
@@ -90,5 +90,6 @@ extern value (fun_print_newline)(value);
 extern value print_int;
 extern value print_bool;
 extern value print_newline;
+extern int (stdlib)();
 
 #endif

@@ -29,7 +29,7 @@ let rec c_of_ty ppf = function
       V.find strtv !tvset 
     with Not_found -> 
       tvset := V.add strtv !tvset;
-      (fprintf ppf "ty *%s = (ty*)malloc(sizeof(ty));\n%s->tykind = TYVAR;\n"
+      (fprintf ppf "ty *%s = (ty*)GC_MALLOC(sizeof(ty));\n%s->tykind = TYVAR;\n"
         strtv
         strtv);
       strtv
@@ -37,7 +37,7 @@ let rec c_of_ty ppf = function
 let cnt_v = ref 0
 
 let toC_v x ppf v =
-  fprintf ppf "%s.f.fundat.closure.fvs[%d] = %s;"
+  fprintf ppf "%s.f->fundat.closure.fvs[%d] = %s;"
     x
     !cnt_v
     v;
@@ -146,7 +146,8 @@ let rec toC_exp ppf f = match f with
       toC_exp f1
       toC_exp f2
   | MakeCls (x, _, { entry = _; actual_fv = vs }, f) ->
-    fprintf ppf "%s.f.funkind = CLOSURE;\n%s.f.fundat.closure.cls = fun_%s;\n%s.f.fundat.closure.fvs = (value*)malloc(sizeof(value) * %d);\n%a\n%a"
+    fprintf ppf "%s.f = (fun*)GC_MALLOC(sizeof(fun));\n%s.f->funkind = CLOSURE;\n%s.f->fundat.closure.cls = fun_%s;\n%s.f->fundat.closure.fvs = (value*)GC_MALLOC(sizeof(value) * %d);\n%a\n%a"
+      x
       x
       x
       x
@@ -155,7 +156,8 @@ let rec toC_exp ppf f = match f with
       toC_vs (x, vs)
       toC_exp f
   | MakeClsLabel (_, _, l, f) ->
-    fprintf ppf "%s.f.funkind = LABEL;\n%s.f.fundat.label = fun_%s;\n%a"
+    fprintf ppf "%s.f = (fun*)GC_MALLOC(sizeof(fun));\n%s.f->funkind = LABEL;\n%s.f->fundat.label = fun_%s;\n%a"
+      l
       l
       l
       l
@@ -371,10 +373,10 @@ let toC_fundefs ppf toplevel =
   is_main := true
 
 let toC_program ppf (Prog (toplevel, f)) = 
+  is_main := false; tvset := V.empty;
   fprintf ppf "%s\n%a%s%a%s"
-    "#include <stdlib.h>\n#include \"../lib/cast.h\"\n"
+    "#include <gc.h>\n#include \"../lib/cast.h\"\n"
     toC_fundefs toplevel
-    "int main() {\n"
+    "int main() {\nstdlib();\n"
     toC_exp f
-    "}";
-  is_main := false; tvset := V.empty
+    "}"

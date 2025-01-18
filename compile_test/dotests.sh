@@ -1,3 +1,4 @@
+ldti ack.ml
 ldti adder.ml
 ldti adder2.ml
 ldti cast-abort.ml
@@ -15,4 +16,5 @@ ldti join-stack3.ml
 ldti non-tail-if.ml
 ldti print.ml
 ldti shuffle.ml
+ldti sum-tail.ml
 ldti sum.ml

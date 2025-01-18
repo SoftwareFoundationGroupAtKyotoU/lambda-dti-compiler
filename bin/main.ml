@@ -126,7 +126,7 @@ let rec read_eval_print lexbuf env tyenv kfunenvs kenv =
             let oc = open_out "result_C/stdout.c" in
             Printf.fprintf oc "%s" c_code;
             close_out oc;
-            let _ = Sys.command "gcc result_C/stdout.c lib/cast.c -o result/stdout.out" in
+            let _ = Sys.command "gcc result_C/stdout.c lib/cast.c -I/mnt/c/gc/include /mnt/c/gc/lib/libgc.so -o result/stdout.out -O2" in
             let _ = Sys.command "result/stdout.out" in
             print "\n";
             read_eval_print lexbuf env (*new_*)tyenv kfunenvs kenv
@@ -137,7 +137,7 @@ let rec read_eval_print lexbuf env tyenv kfunenvs kenv =
             let oc = open_out ("../result_C/"^f^"_out.c") in
             Printf.fprintf oc "%s" c_code;
             close_out oc;
-            let _ = Sys.command ("gcc ../result_C/"^f^"_out.c ../lib/cast.c -o ../result/"^f^".out") in
+            let _ = Sys.command ("gcc ../result_C/"^f^"_out.c ../lib/cast.c -I/mnt/c/gc/include /mnt/c/gc/lib/libgc.so -o ../result/"^f^".out -O2") in
             let _ = Sys.command ("../result/"^f^".out") in
             print "\n"
         | _, _ -> read_eval_print lexbuf env (*new_*)tyenv kfunenvs kenv
