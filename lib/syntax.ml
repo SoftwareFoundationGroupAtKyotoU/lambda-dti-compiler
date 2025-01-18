@@ -50,10 +50,10 @@ module TV = struct
 end
 
 (** Returns a set of free type variables in a given type. *)
-let rec ftv_ty: ty -> TV.t = function
-  | TyVar (_, { contents = None } as x) -> TV.singleton x
+let (*rec*) ftv_ty: ty -> TV.t = function
+  (*| TyVar (_, { contents = None } as x) -> TV.singleton x
   | TyVar (_, { contents = Some u }) -> ftv_ty u
-  | TyFun (u1, u2) -> TV.union (ftv_ty u1) (ftv_ty u2)
+  | TyFun (u1, u2) -> TV.union (ftv_ty u1) (ftv_ty u2)*)
   | _ -> TV.empty
 
 let ftv_tysc: tysc -> TV.t = function

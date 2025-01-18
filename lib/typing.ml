@@ -237,7 +237,7 @@ module ITGL = struct
 
   (* Utility functions for let polymorpism *)
 
-  let closure_tyvars1 u1 env v1 =
+  (*let closure_tyvars1 u1 env v1 =
     TV.elements @@ TV.diff (ftv_ty u1) @@ TV.union (ftv_tyenv env) (ftv_exp v1)
 
   let closure_tyvars_let_decl e u1 env =
@@ -245,7 +245,13 @@ module ITGL = struct
 
   let closure_tyvars2 w1 env u1 v1 =
     let ftvs = TV.big_union [ftv_tyenv env; ftv_ty u1; ftv_exp v1] in
-    TV.elements @@ TV.diff (Syntax.CC.ftv_exp w1) ftvs
+    TV.elements @@ TV.diff (Syntax.CC.ftv_exp w1) ftvs*)
+
+  let closure_tyvars1 _ _ _ = []
+
+  let closure_tyvars_let_decl _ _ _ = []
+
+  let closure_tyvars2 _ _ _ _ = []
 
   let rec is_base_value env u =
     assert (u = TyInt || u = TyBool || u = TyUnit);
