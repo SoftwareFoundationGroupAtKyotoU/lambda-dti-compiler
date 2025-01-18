@@ -313,6 +313,6 @@ module Cls = struct
     | Let (x, _, c, f) -> V.union (fv c) (V.remove x (fv f))
     | Insert _ -> raise @@ Cls_syntax_bug "Insert was applied to fv"
 
-  type program = Prog of fundef list * exp
+  type program = Prog of TV.t * fundef list * exp
 
 end

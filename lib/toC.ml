@@ -7,32 +7,15 @@ exception ToC_error of string
 
 let is_main = ref false
 
-let tvset = ref V.empty
-
-let rec c_of_ty ppf = function
+let c_of_ty = function
   | TyInt -> "&tyint"
   | TyBool -> "&tybool"
   | TyUnit -> "&tyunit"
   | TyDyn -> "&tydyn"
   | TyFun (TyDyn, TyDyn) -> "&tyar"
-  | TyFun (u1, u2) -> 
-    let c1, c2 = c_of_ty ppf u1, c_of_ty ppf u2 in 
-    let v = KNormal.genvar "_tyfun" in
-    (fprintf ppf "ty %s = { .tykind = TYFUN, .tyfun = { .left = %s, .right = %s } };\n"
-      v
-      c1
-      c2);
-    ("&"^v)
-  | TyVar (i, _) -> 
-    let strtv = "_tv" ^ string_of_int i in
-    try 
-      V.find strtv !tvset 
-    with Not_found -> 
-      tvset := V.add strtv !tvset;
-      (fprintf ppf "ty *%s = (ty*)GC_MALLOC(sizeof(ty));\n%s->tykind = TYVAR;\n"
-        strtv
-        strtv);
-      strtv
+  | TyFun (_, _) -> raise @@ ToC_bug "tyfun should be eliminated by closure"
+  | TyVar (i, { contents = None }) -> "_ty" ^ string_of_int i
+  | TyVar (i, { contents = Some _ }) -> "_tyfun" ^ string_of_int i
 
 let cnt_v = ref 0
 
@@ -114,7 +97,7 @@ let rec toC_exp ppf f = match f with
         z
         toC_exp f2
     | Cast (y, u1, u2, r, p) ->
-      let c1, c2 = c_of_ty ppf u1, c_of_ty ppf u2 in
+      let c1, c2 = c_of_ty u1, c_of_ty u2 in
       fprintf ppf "ran_pol %s_p_r = { .filename = %s, .startline = %d, .startchr = %d, .endline = %d, .endchr = %d, .polarity = %d};\nvalue %s = cast(%s, %s, %s, %s_p_r);\n%a"
         y
         (if r.start_p.pos_fname <> "" then "\"File \\\""^r.start_p.pos_fname^"\\\", \"" else "\"\"")
@@ -221,7 +204,7 @@ let rec toC_exp ppf f = match f with
         x
         y
   | Cast (x, u1, u2, r, p) ->
-    let c1, c2 = c_of_ty ppf u1, c_of_ty ppf u2 in
+    let c1, c2 = c_of_ty u1, c_of_ty u2 in
     if !is_main then 
       fprintf ppf "ran_pol %s_p_r = { .filename = %s, .startline = %d, .startchr = %d, .endline = %d, .endchr = %d, .polarity = %d};\ncast(%s, %s, %s, %s_p_r);\nreturn 0;\n"
         x
@@ -297,7 +280,7 @@ let rec toC_exp ppf f = match f with
         y
         z
     | Cast (y, u1, u2, r, p) ->
-      let c1, c2 = c_of_ty ppf u1, c_of_ty ppf u2 in
+      let c1, c2 = c_of_ty u1, c_of_ty u2 in
       fprintf ppf "ran_pol %s_p_r = { .filename = %s, .startline = %d, .startchr = %d, .endline = %d, .endchr = %d, .polarity = %d};\n%s = cast(%s, %s, %s, %s_p_r);\n"
         x
         (if r.start_p.pos_fname <> "" then "\"File \\\""^r.start_p.pos_fname^"\\\", \"" else "\"\"")
@@ -372,11 +355,52 @@ let toC_fundefs ppf toplevel =
     toC_list toplevel);
   is_main := true
 
-let toC_program ppf (Prog (toplevel, f)) = 
-  is_main := false; tvset := V.empty;
-  fprintf ppf "%s\n%a%s%a%s"
+let toC_tydecl ppf (i, { contents = opu }) =
+  match opu with
+  | None -> fprintf ppf "ty *_ty%d;\n" i
+  | Some _ -> fprintf ppf "ty *_tyfun%d;\n" i
+
+let toC_tydecls ppf l = 
+  if List.length l = 0 then fprintf ppf ""
+  else let toC_sep ppf () = fprintf ppf "" in
+  let toC_list ppf decls = pp_print_list toC_tydecl ppf decls ~pp_sep:toC_sep in
+  fprintf ppf "%a\n"
+    toC_list l
+
+let toC_tycontent ppf (i, { contents = opu }) =
+  match opu with
+  | None -> fprintf ppf "_ty%d = (ty*)GC_MALLOC(sizeof(ty));\n_ty%d->tykind = TYVAR;\n" i i
+  | Some TyFun (u1, u2) -> 
+    fprintf ppf "_tyfun%d = (ty*)GC_MALLOC(sizeof(ty));\n_tyfun%d->tykind = TYFUN;\n_tyfun%d->tyfun.left = (ty*)GC_MALLOC(sizeof(ty));\n_tyfun%d->tyfun.right = (ty*)GC_MALLOC(sizeof(ty));\n_tyfun%d->tyfun.left = %s;\n_tyfun%d->tyfun.right = %s;\n"
+      i
+      i
+      i
+      i
+      i
+      (c_of_ty u1)
+      i
+      (c_of_ty u2)
+  | Some _ -> raise @@ ToC_bug "not tyfun is in tyvar option"
+
+let toC_tycontents ppf l = 
+  let toC_sep ppf () = fprintf ppf "" in
+  let toC_list ppf decls = pp_print_list toC_tycontent ppf decls ~pp_sep:toC_sep in
+  fprintf ppf "%a"
+    toC_list l
+
+let toC_tys ppf l =
+  fprintf ppf "%a%s%a%s"
+    toC_tydecls l
+    "int set_tys() {\n"
+    toC_tycontents l
+    "return 0;\n}\n"
+
+let toC_program ppf (Prog (tvset, toplevel, f)) = 
+  is_main := false;
+  fprintf ppf "%s\n%a\n%a%s%a%s"
     "#include <gc.h>\n#include \"../lib/cast.h\"\n"
+    toC_tys (TV.elements tvset)
     toC_fundefs toplevel
-    "int main() {\nstdlib();\n"
+    "int main() {\nstdlib();\nset_tys();\n"
     toC_exp f
     "}"

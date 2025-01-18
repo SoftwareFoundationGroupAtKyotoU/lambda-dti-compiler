@@ -8,6 +8,19 @@ module KNorm = struct
 
   let toplevel = ref []
 
+  let tvset = ref TV.empty
+
+  let rec ty_tv = function
+    | TyInt | TyBool | TyUnit | TyDyn | TyFun (TyDyn, TyDyn) as u -> u
+    | TyVar tv as u -> tvset := TV.add tv !tvset; u
+    | TyFun (u1, u2) ->
+      let u1, u2 = ty_tv u1, ty_tv u2 in
+      let newu = Typing.fresh_tyvar () in
+      let newtv = begin match newu with
+        | TyVar (i, u) -> u := Some (TyFun (u1, u2)); (i, u)
+        | _ -> raise @@ Closure_bug "not tyvar was created"
+      end in tvset := TV.add newtv !tvset; TyVar newtv
+
   let rec toCls_exp tyenv known = function
     | Var x -> Cls.Var x
     | IConst i -> Cls.Int i
@@ -22,7 +35,7 @@ module KNorm = struct
     | AppExp (x, y) when Cls.V.mem x known -> Cls.AppDir (Cls.to_label x, y)
     | AppExp (x, y) -> Cls.AppCls (x, y)
     | AppTy (x, tvs, tas) -> Cls.AppTy (x, tvs, tas)
-    | CastExp (r, x, u1, u2, p) -> Cls.Cast (x, u1, u2, r, p)
+    | CastExp (r, x, u1, u2, p) -> Cls.Cast (x, ty_tv u1, ty_tv u2, r, p)
     | LetExp (x, u, f1, f2) -> 
       let f1 = toCls_exp tyenv known f1 in
       let f2 = toCls_exp (Environment.add x u tyenv) known f2 in
@@ -57,9 +70,9 @@ module KNorm = struct
     @@ (Environment.empty, Cls.V.empty)
 
   let toCls_program p =
-    toplevel := [];
+    toplevel := []; tvset := TV.empty;
     let f = toCls_exp tyenv venv p in
-    Cls.Prog (List.rev !toplevel, f)
+    Cls.Prog (!tvset, List.rev !toplevel, f)
 end
 
 (*
