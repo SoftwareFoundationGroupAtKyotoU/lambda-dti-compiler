@@ -77,7 +77,7 @@ ground_ty to_ground(ty t) {
 value cast(value x, ty *t1, ty *t2, ran_pol r_p) {			// input = x:t1=>t2
 	value retx;
 	if (t1->tykind == TYFUN && t2->tykind == TYFUN) { 				// when t1 and t2 are function type
-		printf("defined as a wrapped function\n");						// define x:U1->U2=>U3->U4 as wrapped function
+		//printf("defined as a wrapped function\n");						// define x:U1->U2=>U3->U4 as wrapped function
 		retx.f = (fun*)GC_MALLOC(sizeof(fun));
 		retx.f->fundat.wrap.w = (fun*)GC_MALLOC(sizeof(fun));
 		retx.f->fundat.wrap.w = x.f;
@@ -88,32 +88,32 @@ value cast(value x, ty *t1, ty *t2, ran_pol r_p) {			// input = x:t1=>t2
 		retx.f->fundat.wrap.r_p = r_p;
 		retx.f->funkind = WRAPPED;
 	} else if (is_ground(*t1) == 1 && t2->tykind == DYN) {			// when t1 is ground and t2 is ?
-		printf("defined as a dyn value\n");								// define x:G=>? as dynamic type value
+		//printf("defined as a dyn value\n");								// define x:G=>? as dynamic type value
 		retx.d =  (dyn*)GC_MALLOC(sizeof(dyn));
 		retx.d->v = (value*)GC_MALLOC(sizeof(value));
 		*retx.d->v = x;
 		retx.d->g = to_ground(*t1);
 		retx.d->r_p = r_p;
 	} else if (t1->tykind == DYN && t2->tykind == DYN) {			// when t1 and t2 are ?
-		printf ("ID STAR\n");											// R_IDSTAR (x:?=>? -> x)
+		//printf ("ID STAR\n");											// R_IDSTAR (x:?=>? -> x)
 		retx = x;
 	} else if (t1->tykind == BASE_INT && t2->tykind == BASE_INT) {	// when t1 and t2 are int
-		printf ("ID BASE by int\n");									// R_IDBASE (x:int=>int -> x)
+		//printf ("ID BASE by int\n");									// R_IDBASE (x:int=>int -> x)
 		retx = x;
 	} else if (t1->tykind == BASE_BOOL && t2->tykind == BASE_BOOL) {// when t1 and t2 are bool
-		printf ("ID BASE by bool\n");									// R_IDBASE (x:bool=>bool -> x)
+		//printf ("ID BASE by bool\n");									// R_IDBASE (x:bool=>bool -> x)
 		retx = x;
 	} else if (t1->tykind == BASE_UNIT && t2->tykind == BASE_UNIT) {// when t1 and t2 are unit
-		printf ("ID BASE by unit\n");									// R_IDBASE (x:unit=>unit -> x)
+		//printf ("ID BASE by unit\n");									// R_IDBASE (x:unit=>unit -> x)
 		retx = x;
 	} else if (t1->tykind == DYN && is_ground(*t2) == 1) {			// when t1 is ? and t2 is ground type
 		ground_ty t = x.d->g;
 		ground_ty t_ = to_ground(*t2);
 		if (t == t_) {													// when t1's injection ground type equals t2
-			printf("cast success\n");										// R_SUCCEED (x':G=>?=>G -> x')
+			//printf("cast success\n");										// R_SUCCEED (x':G=>?=>G -> x')
 			retx = *x.d->v;
 		} else if (t != t_) {											// when t1's injection ground type dosen't equal t2
-			printf("cast fail\n");											// E_FAIL (x':G1=>?=>G2 if G1<>G2 -> blame)
+			//printf("cast fail\n");											// E_FAIL (x':G1=>?=>G2 if G1<>G2 -> blame)
 			blame(r_p);
 			abort();
 		} else {
@@ -121,35 +121,35 @@ value cast(value x, ty *t1, ty *t2, ran_pol r_p) {			// input = x:t1=>t2
 			abort();
 		}
 	} else if (t1->tykind == TYFUN && t2->tykind == DYN) {			// when t1 is function type and t2 is ?
-		printf("cast ground\n");
+		//printf("cast ground\n");
 		value x_ = cast(x, t1, &tyar, r_p);									// R_GROUND (x:U=>? -> x:U=>G=>U)
 		retx = cast(x_, &tyar, t2, r_p);
 	} else if (t1->tykind == DYN && t2->tykind == TYFUN) {			// when t1 is ? and t2 is function type
-		printf("cast expand\n");
+		//printf("cast expand\n");
 		value x_ = cast(x, t1, &tyar, r_p);									// R_EXPAND (x:?=>U -> x:?=>G=>U)
 		retx = cast(x_, &tyar, t2, r_p); 
 	} else if (t1->tykind == DYN && t2->tykind == TYVAR){			// when t1 is ? and t2 is type variable
 		switch(x.d->g){
 			case(G_INT):												// when t1's injection ground type is int
-			printf("DTI : int was inferenced\n");							// R_INSTBASE (x':int=>?=>X -[X:=int]> x')
+			//printf("DTI : int was inferenced\n");							// R_INSTBASE (x':int=>?=>X -[X:=int]> x')
 			*t2 = tyint;
 			retx = *x.d->v;
 			break;
 
 			case(G_BOOL):												// when t1's injection ground type is bool	
-			printf("DTI : bool was inferenced\n");							// R_INSTBASE (x':bool=>?=>X -[X:=bool]> x')
+			//printf("DTI : bool was inferenced\n");							// R_INSTBASE (x':bool=>?=>X -[X:=bool]> x')
 			*t2 = tybool;
 			retx = *x.d->v;
 			break;
 
 			case(G_UNIT):												// when t1's injection ground type is unit
-			printf("DTI : unit was inferenced\n");							// R_INSTBASE (x':unit=>?=>X -[X:=unit]> x')
+			//printf("DTI : unit was inferenced\n");							// R_INSTBASE (x':unit=>?=>X -[X:=unit]> x')
 			*t2 = tyunit;
 			retx = *x.d->v;
 			break;
 
 			case(G_AR):													// when t1's injection ground type is ?->?
-			printf("DTI : arrow was inferenced\n");							// R_INSTARROW (x':?->?=>?=>X -[X:=X_1->X_2]> x':?->?=>X_1->X_2)
+			//printf("DTI : arrow was inferenced\n");							// R_INSTARROW (x':?->?=>?=>X -[X:=X_1->X_2]> x':?->?=>X_1->X_2)
 			t2->tykind = TYFUN;
 			t2->tyfun.left = (ty*)GC_MALLOC(sizeof(ty));
 			t2->tyfun.right = (ty*)GC_MALLOC(sizeof(ty));
