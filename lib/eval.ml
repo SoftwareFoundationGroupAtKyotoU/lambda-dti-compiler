@@ -209,8 +209,8 @@ module KNorm = struct
     | CastExp (r, x, u1, u2, p) -> CastExp (r, x, subst_type s u1, subst_type s u2, p)
     | LetExp (x, u, f1, f2) ->
       LetExp (x, subst_type s u, subst_exp s f1, subst_exp s f2)
-    | LetRecExp (x, u, arg, f1, f2) ->
-      LetRecExp (x, subst_type s u, (fun (x, u) -> (x, subst_type s u)) arg, subst_exp s f1, subst_exp s f2)
+    | LetRecExp (x, u, tvs, arg, f1, f2) ->
+      LetRecExp (x, subst_type s u, tvs, (fun (x, u) -> (x, subst_type s u)) arg, subst_exp s f1, subst_exp s f2)
 
   let rec eval_exp ?(debug=false) kenv f = 
     if debug then fprintf err_formatter "keval <-- %a\n" Pp.KNorm.pp_exp f;
@@ -289,7 +289,7 @@ module KNorm = struct
     | LetExp (x, _, f1, f2) -> 
       let v1 = eval_exp kenv f1 in
       eval_exp (Environment.add x v1 kenv) f2
-    | LetRecExp (x, _, (y, _), f1, f2) -> 
+    | LetRecExp (x, _, _, (y, _), f1, f2) -> 
       let v1 = 
         FunV (
           fun (tvs, us) -> fun v ->
@@ -378,7 +378,7 @@ module KNorm = struct
       let v = eval_exp kenv f ~debug:debug in
       let kenv = Environment.add x v kenv in
       kenv, x, v
-    | LetRecDecl (x, _, (y, _), f') -> 
+    | LetRecDecl (x, _, _, (y, _), f') -> 
       let v = 
         FunV (
           fun (tvs, us) -> fun v ->

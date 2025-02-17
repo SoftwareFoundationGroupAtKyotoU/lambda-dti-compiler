@@ -235,12 +235,12 @@ module KNorm = struct
     | AppTy of id * tyvar list * tyarg list
     | CastExp of range * id * ty * ty * polarity
     | LetExp of id * ty * exp * exp
-    | LetRecExp of id * ty * (id * ty) * exp * exp
+    | LetRecExp of id * ty * tyvar list * (id * ty) * exp * exp
 
   type program =
     | Exp of exp
     | LetDecl of id * ty * exp
-    | LetRecDecl of id * ty * (id * ty) * exp
+    | LetRecDecl of id * ty * tyvar list * (id * ty) * exp
 
   type tag = I | B | U | Ar
 
@@ -266,6 +266,8 @@ module Cls = struct
 
   type closure = { entry : label; actual_fv : id list }
 
+  type ftv = { ftvs : tyarg list; offset : int }
+
   type exp =
     | Var of id
     | Int of int
@@ -277,17 +279,19 @@ module Cls = struct
     | Mod of id * id
     | IfEq of id * id * exp * exp
     | IfLte of id * id * exp * exp
-    | AppTy of id * tyvar list * tyarg list
+    | AppTy of id * int * tyarg list
     | MakeCls of id * ty * closure * exp
     | AppCls of id * id
     | AppDir of label * id
     | Cast of id * ty * ty * range * polarity
     | Let of id * ty * exp * exp
-    (*以下はC用*)
-    | MakeClsLabel of id * ty * label * exp
+    | MakeLabel of id * ty * label * exp
+    | MakePolyLabel of id * ty * label * ftv * exp
+    | MakePolyCls of id * ty * closure * ftv * exp
+    | SetTy of tyvar * exp
     | Insert of id * exp
 
-  type fundef = { name : label * ty; arg : id * ty; formal_fv : (id * ty) list; body : exp }
+  type fundef = { name : label * ty; tvs : tyvar list * int; arg : id * ty; formal_fv : (id * ty) list; body : exp }
 
   module V = struct
     include Set.Make (
@@ -305,11 +309,14 @@ module Cls = struct
     | Add (x, y) | Sub (x, y) | Mul (x, y) | Div (x, y) | Mod (x, y) -> V.of_list [x; y]
     | IfEq (x, y, f1, f2) | IfLte (x, y, f1, f2) -> V.big_union [V.of_list [x; y]; fv f1; fv f2]
     | AppTy (x, _, _) -> V.singleton x
+    | SetTy (_, f) -> fv f
     | AppDir (_, y) -> V.singleton y
     | AppCls (x, y) -> V.of_list [x; y]
     | Cast (x, _, _, _, _) -> V.singleton x
+    | MakeLabel (x, _, _, f) -> V.remove x (fv f)
+    | MakePolyLabel (x, _, _, _, f) -> V.remove x (fv f)
     | MakeCls (x, _, { entry = _; actual_fv = vs }, f) -> V.remove x (V.union (V.of_list vs) (fv f))
-    | MakeClsLabel (x, _, _, f) -> V.remove x (fv f)
+    | MakePolyCls (x, _, { entry = _; actual_fv = vs }, _, f) -> V.remove x (V.union (V.of_list vs) (fv f))
     | Let (x, _, c, f) -> V.union (fv c) (V.remove x (fv f))
     | Insert _ -> raise @@ Cls_syntax_bug "Insert was applied to fv"
 

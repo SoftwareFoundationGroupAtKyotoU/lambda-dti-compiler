@@ -10,18 +10,35 @@ module KNorm = struct
 
   let tvset = ref TV.empty
 
-  let rec ty_tv = function
-    | TyInt | TyBool | TyUnit | TyDyn | TyFun (TyDyn, TyDyn) as u -> u
-    | TyVar tv as u -> tvset := TV.add tv !tvset; u
+  let rec exist_tv l1 l2 = match l2 with
+    | h :: t -> if List.mem h l1 then true else exist_tv l1 t
+    | [] -> false
+  
+  let rec ty_tv tvs = function
+    | TyInt | TyBool | TyUnit | TyDyn | TyFun (TyDyn, TyDyn) as u -> (u, fun x -> x)
+    | TyVar tv as u -> if not (List.mem tv tvs) then (tvset := TV.add tv !tvset; (u, fun x -> x)) else (u, fun x -> x)
     | TyFun (u1, u2) ->
-      let u1, u2 = ty_tv u1, ty_tv u2 in
+      let u1, ufun1 = ty_tv tvs u1 in
+      let u2, ufun2 = ty_tv tvs u2 in
       let newu = Typing.fresh_tyvar () in
       let newtv = begin match newu with
         | TyVar (i, u) -> u := Some (TyFun (u1, u2)); (i, u)
         | _ -> raise @@ Closure_bug "not tyvar was created"
-      end in tvset := TV.add newtv !tvset; TyVar newtv
+      end in if not (exist_tv (TV.elements (Syntax.ftv_ty u1)) tvs) && not (exist_tv (TV.elements (Syntax.ftv_ty u2)) tvs) then 
+        (tvset := TV.add newtv !tvset; (newu, fun x -> ufun1 (ufun2 x)))
+      else (newu, fun x -> ufun1 (ufun2 (Cls.SetTy (newtv, x))))
 
-  let rec toCls_exp tyenv known = function
+  let ta_tv tvs = function
+    | Ty u -> let (u, f) = ty_tv tvs u in (Ty u, f)
+    | TyNu -> (TyNu, fun x -> x)
+
+  let tyvar_to_tyarg tvs = 
+    let rec ttt l r = match l with
+    | tv :: t -> ttt t ((Ty (TyVar tv)) :: r)
+    | [] -> r
+  in ttt (List.rev tvs) []
+
+  let rec toCls_exp tyenv known tvs = function
     | Var x -> Cls.Var x
     | IConst i -> Cls.Int i
     | UConst -> Cls.Unit
@@ -30,35 +47,47 @@ module KNorm = struct
     | Mul (x, y) -> Cls.Mul (x, y)
     | Div (x, y) -> Cls.Div (x, y)
     | Mod (x, y) -> Cls.Mod (x, y)
-    | IfEqExp (x, y, f1, f2) -> Cls.IfEq (x, y, toCls_exp tyenv known f1, toCls_exp tyenv known f2)
-    | IfLteExp (x, y, f1, f2) -> Cls.IfLte (x, y, toCls_exp tyenv known f1, toCls_exp tyenv known f2)
+    | IfEqExp (x, y, f1, f2) -> Cls.IfEq (x, y, toCls_exp tyenv known tvs f1, toCls_exp tyenv known tvs f2)
+    | IfLteExp (x, y, f1, f2) -> Cls.IfLte (x, y, toCls_exp tyenv known tvs f1, toCls_exp tyenv known tvs f2)
     | AppExp (x, y) when Cls.V.mem x known -> Cls.AppDir (Cls.to_label x, y)
     | AppExp (x, y) -> Cls.AppCls (x, y)
-    | AppTy (x, tvs, tas) -> Cls.AppTy (x, tvs, tas)
-    | CastExp (r, x, u1, u2, p) -> Cls.Cast (x, ty_tv u1, ty_tv u2, r, p)
+    | AppTy (x, _, tas) -> 
+      let uandf = List.map (ta_tv tvs) tas in
+      let rec destruct_uandf l ru rf = match l with
+        | (u, f) :: t -> destruct_uandf t (u::ru) (fun x -> rf (f x))
+        | [] -> ru, rf 
+      in let us, f = destruct_uandf (List.rev uandf) [] (fun x -> x) in
+      f (Cls.AppTy (x, List.length tas + List.length tvs, us))
+    | CastExp (r, x, u1, u2, p) -> 
+      let u1, udeclfun1 = ty_tv tvs u1 in 
+      let u2, udeclfun2 = ty_tv tvs u2 in 
+      udeclfun1 (udeclfun2 (Cls.Cast (x, u1, u2, r, p)))
     | LetExp (x, u, f1, f2) -> 
-      let f1 = toCls_exp tyenv known f1 in
-      let f2 = toCls_exp (Environment.add x u tyenv) known f2 in
+      let f1 = toCls_exp tyenv known tvs f1 in
+      let f2 = toCls_exp (Environment.add x u tyenv) known tvs f2 in
       Cls.Let (x, u, f1, f2)
-    | LetRecExp (x, u, (y, u'), f1, f2) ->
+    | LetRecExp (x, u, tvs', (y, u'), f1, f2) ->
       let toplevel_backup = !toplevel in
+      let tvset_backup = !tvset in
+      let new_tvs = tvs' @ tvs in
       let tyenv' = Environment.add x u tyenv in
       let known' = Cls.V.add x known in
-      let f1' = toCls_exp (Environment.add y u' tyenv') known' f1 in
+      let f1' = toCls_exp (Environment.add y u' tyenv') known' new_tvs f1 in
       let zs = Cls.V.diff (Cls.fv f1') (Cls.V.singleton y) in
       let known', f1' =
-        if Cls.V.is_empty zs then known', f1'
-        else (toplevel := toplevel_backup;
-        let f1' = toCls_exp (Environment.add y u' tyenv') known f1 in
+        if Cls.V.is_empty zs && List.length tvs = 0 then known', f1'
+        else (toplevel := toplevel_backup; tvset := tvset_backup;
+        let f1' = toCls_exp (Environment.add y u' tyenv') known new_tvs f1 in
         known, f1')
       in let zs = Cls.V.elements (Cls.V.diff (Cls.fv f1') (Cls.V.add x (Cls.V.singleton y))) in
       let zts = List.map (fun z -> (z, Environment.find z tyenv')) zs in
-      toplevel := { Cls.name = (Cls.to_label x, u); Cls.arg = (y, u'); Cls.formal_fv = zts; Cls.body = f1' } :: !toplevel;
-      let f2' = toCls_exp tyenv' known' f2 in
+      toplevel := { Cls.name = (Cls.to_label x, u); Cls.tvs = (new_tvs, List.length tvs'); Cls.arg = (y, u'); Cls.formal_fv = zts; Cls.body = f1' } :: !toplevel;
+      let f2' = toCls_exp tyenv' known' tvs f2 in
       if Cls.V.mem x (Cls.fv f2') then
-        if List.length zs <> 0 then
-          Cls.MakeCls (x, u, { Cls.entry = Cls.to_label x; Cls.actual_fv = zs }, f2')
-        else Cls.MakeClsLabel (x, u, Cls.to_label x, f2')
+        if List.length zs = 0 && List.length new_tvs = 0 then Cls.MakeLabel (x, u, Cls.to_label x, f2')
+        else if List.length new_tvs = 0 then Cls.MakeCls (x, u, { Cls.entry = Cls.to_label x; Cls.actual_fv = zs }, f2')
+        else if List.length zs = 0 then Cls.MakePolyLabel (x, u, Cls.to_label x, { ftvs = tyvar_to_tyarg tvs; offset = List.length tvs' }, f2')
+        else Cls.MakePolyCls (x, u, { Cls.entry = Cls.to_label x; Cls.actual_fv = zs }, { ftvs = tyvar_to_tyarg tvs; offset = List.length tvs' }, f2')
       else f2'
 
   let ini x u (env, vs) = (Environment.add x u env, Cls.V.add x vs)
@@ -71,7 +100,7 @@ module KNorm = struct
 
   let toCls_program p =
     toplevel := []; tvset := TV.empty;
-    let f = toCls_exp tyenv venv p in
+    let f = toCls_exp tyenv venv [] p in
     Cls.Prog (!tvset, List.rev !toplevel, f)
 end
 

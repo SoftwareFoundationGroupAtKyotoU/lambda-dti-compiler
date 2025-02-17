@@ -47,15 +47,22 @@ typedef struct fun fun;
 typedef struct fun {
 	enum funkind {
 		LABEL,
+		POLY_LABEL,
 		CLOSURE,
+		POLY_CLOSURE,
 		WRAPPED,
 	} funkind;
 	union fundat {
 		value (*label)(value);
+		value (*poly_label)(value, ty**);
 		struct closure {
 			value (*cls)(value, value*);
 			value *fvs;
 		} closure;
+		struct poly_closure {
+			value (*pcls)(value, value*, ty**);
+			value *fvs;
+		} poly_closure;
 		struct wrap {
 			fun *w;
 			ty *u1;
@@ -65,6 +72,7 @@ typedef struct fun {
 			ran_pol r_p;
 		} wrap;
 	} fundat;
+	ty **tas;
 } fun;
 
 typedef union value {
@@ -82,6 +90,7 @@ extern ty tyint;
 extern ty tybool;
 extern ty tyunit;
 extern ty tyar;
+extern ty *(newty)();
 
 extern value (fun_print_int)(value);
 extern value (fun_print_bool)(value);

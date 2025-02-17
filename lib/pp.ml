@@ -93,6 +93,10 @@ let pp_print_var ppf (x, ys) =
       x
       pp_list ys
 
+let pp_tyarg ppf = function
+  | Ty u -> pp_ty ppf u
+  | TyNu -> pp_print_string ppf "ν"
+
 let pp_let_tyabses ppf tyvars =
   if List.length tyvars = 0 then
     fprintf ppf ""
@@ -100,6 +104,12 @@ let pp_let_tyabses ppf tyvars =
     let pp_sep ppf () = fprintf ppf "," in
     let pp_list ppf types = pp_print_list pp_ty ppf types ~pp_sep:pp_sep in
     fprintf ppf "fun %a -> " pp_list @@ List.map (fun x -> TyVar x) tyvars
+
+let pp_print_tas ppf tas =
+  let pp_sep ppf () = fprintf ppf "," in
+  let pp_list ppf types = pp_print_list pp_tyarg ppf types ~pp_sep:pp_sep in
+  fprintf ppf "%a"
+    pp_list tas
 
 module ITGL = struct
   open Syntax.ITGL
@@ -200,10 +210,6 @@ module CC = struct
     | CastExp _, CastExp _ -> true
     | _ -> gt_exp f1 f2
 
-  let pp_tyarg ppf = function
-    | Ty u -> pp_ty ppf u
-    | TyNu -> pp_print_string ppf "ν"
-
   let pp_print_var ppf (x, ys) =
     if List.length ys = 0 then
       fprintf ppf "%s" x
@@ -290,22 +296,6 @@ end
 module KNorm = struct 
   open Syntax.KNorm
 
-  let pp_tyarg ppf = function
-  | Ty u -> pp_ty ppf u
-  | TyNu -> pp_print_string ppf "ν"
-
-  let pp_print_tas ppf tas =
-    let pp_sep ppf () = fprintf ppf "," in
-    let pp_list ppf types = pp_print_list pp_tyarg ppf types ~pp_sep:pp_sep in
-    fprintf ppf "(%a)"
-      pp_list tas
-
-  let pp_print_tyabses ppf tvs =
-    let pp_sep ppf () = fprintf ppf "," in
-    let pp_list ppf types = pp_print_list pp_ty ppf types ~pp_sep:pp_sep in
-    fprintf ppf "(%a)"
-      pp_list @@ List.map (fun x -> TyVar x) tvs
-
   let gt_exp e e1 = match e, e1 with
     | (Var _ | IConst _ | UConst), _ -> raise @@ Syntax_error(* "gt_exp: value-exp was given as e"*)
     | (Add _ | Sub _ | Mul _ | Div _ | Mod _ | AppExp _ | AppTy _), _ -> raise @@ Syntax_error(* "gt_exp : expression not contain exp was given as e"*)
@@ -341,10 +331,9 @@ module KNorm = struct
         pp_exp e2
     | AppExp (x, y) -> 
       fprintf ppf "%s %s" x y
-    | AppTy (x, tvs, tas) ->
-      fprintf ppf "%s[%a<-%a]"
+    | AppTy (x, _, tas) ->
+      fprintf ppf "%s[%a]"
         x
-        pp_print_tyabses tvs
         pp_print_tas tas
     | CastExp (_, x, u1, u2, _) ->
         fprintf ppf "%s: %a => %a"
@@ -357,10 +346,11 @@ module KNorm = struct
           pp_ty u
           (with_paren (gt_exp e e1) pp_exp) e1
           (with_paren (gte_exp e e2) pp_exp) e2
-    | LetRecExp (x, u, (y, u'), e1, e2) as e ->
-        fprintf ppf "let (%s:%a) = fun (%s:%a) -> %a in %a"
+    | LetRecExp (x, u, tvs, (y, u'), e1, e2) as e ->
+        fprintf ppf "let (%s:%a) = %afun (%s:%a) -> %a in %a"
           x
           pp_ty u
+          pp_let_tyabses tvs
           y
           pp_ty u'
           (with_paren (gt_exp e e1) pp_exp) e1
@@ -373,10 +363,11 @@ module KNorm = struct
         x
         pp_ty u
         pp_exp e
-    | LetRecDecl (x, u, (y, u'), e) ->
-        fprintf ppf "let (%s:%a) = fun (%s:%a) -> %a"
+    | LetRecDecl (x, u, tvs, (y, u'), e) ->
+        fprintf ppf "let (%s:%a) = %afun (%s:%a) -> %a"
           x
           pp_ty u
+          pp_let_tyabses tvs
           y
           pp_ty u'
           pp_exp e
@@ -396,21 +387,13 @@ end
 module Cls = struct
   open Syntax.Cls
 
-  let pp_tyarg ppf = function
-  | Ty u -> pp_ty ppf u
-  | TyNu -> pp_print_string ppf "ν"
-
-  let pp_print_tas ppf tas =
-    let pp_sep ppf () = fprintf ppf "," in
-    let pp_list ppf types = pp_print_list pp_tyarg ppf types ~pp_sep:pp_sep in
-    fprintf ppf "(%a)"
-      pp_list tas
-
-  let pp_print_tyabses ppf tvs =
-    let pp_sep ppf () = fprintf ppf "," in
-    let pp_list ppf types = pp_print_list pp_ty ppf types ~pp_sep:pp_sep in
-    fprintf ppf "(%a)"
-      pp_list @@ List.map (fun x -> TyVar x) tvs
+  let pp_let_tyabses ppf tyvars =
+    if List.length tyvars = 0 then
+      fprintf ppf ""
+    else
+      let pp_sep ppf () = fprintf ppf "," in
+      let pp_list ppf types = pp_print_list pp_ty ppf types ~pp_sep:pp_sep in
+      fprintf ppf "[%a] " pp_list @@ List.map (fun x -> TyVar x) tyvars
   
   let pp_print_cls ppf { entry = x; actual_fv = ids } =
     if List.length ids = 0 then 
@@ -444,27 +427,49 @@ module Cls = struct
         pp_exp e2
     | AppCls (x, y) -> fprintf ppf "%s:cls %s" x y
     | AppDir (l, x) -> fprintf ppf "%s:label %s" l x
-    | AppTy (x, tvs, tas) ->
-      fprintf ppf "%s[%a<-%a]"
+    | AppTy (x, _, tas) ->
+      fprintf ppf "%s[%a]"
         x
-        pp_print_tyabses tvs
         pp_print_tas tas
+    | SetTy ((i, { contents = None }), f) -> 
+      fprintf ppf "set _ty%d = TYVAR in %a"
+        i
+        pp_exp f
+    | SetTy ((i, { contents = Some (TyFun (u1, u2)) }), f) -> 
+      fprintf ppf "set _tyfun%d = TYFUN(%a, %a) in %a"
+        i
+        pp_ty u1
+        pp_ty u2
+        pp_exp f
+    | SetTy _ -> raise @@ Syntax_error
     | Cast (x, u1, u2, _, _) ->
         fprintf ppf "%s: %a => %a"
           x
           pp_ty u1
           pp_ty u2
+    | MakeLabel (x, u, l, f) ->
+      fprintf ppf "lbl (%s:%a) = %s in %a"
+        x
+        pp_ty u
+        l
+        pp_exp f
+    | MakePolyLabel (x, u, l, _, f) ->
+      fprintf ppf "plbl (%s:%a) = %s in %a"
+        x
+        pp_ty u
+        l
+        pp_exp f
     | MakeCls (x, u, cls, f) ->
       fprintf ppf "cls (%s:%a) = %a in %a"
         x
         pp_ty u
         pp_print_cls cls
         pp_exp f
-    | MakeClsLabel (x, u, l, f) ->
-      fprintf ppf "clslabel (%s:%a) = %s in %a"
+    | MakePolyCls (x, u, cls, _, f) ->
+      fprintf ppf "pcls (%s:%a) = %a in %a"
         x
         pp_ty u
-        l
+        pp_print_cls cls
         pp_exp f
     | Let (x, u, f1, f2) ->
         fprintf ppf "let (%s:%a) = %a in %a"
@@ -472,7 +477,7 @@ module Cls = struct
           pp_ty u
           pp_exp f1
           pp_exp f2
-    | Insert _ -> raise @@ Syntax_error (*"insert was applied to Cls.pp_exp"*)
+    | Insert _ -> raise @@ Syntax_error (*"insert or setty was applied to Cls.pp_exp"*)
 
   let pp_fv ppf (x, u) =
     fprintf ppf "%s:%a"
@@ -485,18 +490,20 @@ module Cls = struct
     fprintf ppf "%a"
       pp_list fvl
 
-  let pp_fundef ppf { name = (l, ul); arg = (x, ux); formal_fv = fvl; body = f} = 
+  let pp_fundef ppf { name = (l, ul); tvs = (tvs, _); arg = (x, ux); formal_fv = fvl; body = f} = 
     if List.length fvl = 0 then
-      fprintf ppf "let rec (%s:%a) (%s:%a) = %a"
+      fprintf ppf "let rec (%s:%a) %a(%s:%a) = %a"
         l
         pp_ty ul
+        pp_let_tyabses tvs
         x
         pp_ty ux
         pp_exp f
     else
-      fprintf ppf "let rec (%s:%a) (%s:%a) = %a (fv:%a)"
+      fprintf ppf "let rec (%s:%a) %a(%s:%a) = %a (fv:%a)"
         l
         pp_ty ul
+        pp_let_tyabses tvs
         x
         pp_ty ux
         pp_exp f

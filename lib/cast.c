@@ -9,6 +9,12 @@ ty tybool = { .tykind = BASE_BOOL };
 ty tyunit = { .tykind = BASE_UNIT };
 ty tyar = { .tykind = TYFUN, .tyfun = { .left = &tydyn, .right = &tydyn } };
 
+ty *newty() {
+	ty *retty = (ty*)GC_MALLOC(sizeof(ty));
+	retty->tykind = TYVAR;
+	return retty;
+}
+
 int blame(ran_pol r_p){
 	if(r_p.polarity==1) {
 		printf("Blame on the expression side:\n");
@@ -169,6 +175,8 @@ value app(value f, value v) {									// reduction of f(v)
 	value retx;
 	value (*l)(value);
 	value (*c)(value, value*);
+	value (*pl)(value, ty**);
+	value (*pc)(value, value*, ty**);
 	ran_pol neg_r_p;
 	switch(f.f->funkind) {
 		case(LABEL):												// if f is "label" function
@@ -177,10 +185,22 @@ value app(value f, value v) {									// reduction of f(v)
 		//printf("Heap size = %d\n", (int)GC_get_heap_size());
 		break;
 
+		case(POLY_LABEL):
+		pl = f.f->fundat.poly_label;
+		retx = pl(v, f.f->tas);
+		break;
+
 		case(CLOSURE):												// if f is closure
 		c = f.f->fundat.closure.cls;				// R_BETA : return f(v, fvs)
 		//printf("Heap size = %d\n", (int)GC_get_heap_size());
 		retx = c(v, f.f->fundat.closure.fvs);
+		//printf("Heap size = %d\n", (int)GC_get_heap_size());
+		break;
+
+		case(POLY_CLOSURE):												// if f is closure
+		pc = f.f->fundat.poly_closure.pcls;				// R_BETA : return f(v, fvs)
+		//printf("Heap size = %d\n", (int)GC_get_heap_size());
+		retx = pc(v, f.f->fundat.poly_closure.fvs, f.f->tas);
 		//printf("Heap size = %d\n", (int)GC_get_heap_size());
 		break;
 
