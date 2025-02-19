@@ -1,0 +1,1 @@
+let g x = ((fun y -> y):? -> ?) x in print_bool (g ((g 3) = 2));;

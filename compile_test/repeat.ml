@@ -1,0 +1,1 @@
+let rec repeat n f (x:?) :int = if n = 0 then x else repeat (n-1) f (f x) in print_int (repeat 10 (fun x -> x) 4);;

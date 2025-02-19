@@ -292,14 +292,16 @@ let rec toC_exp ppf f = match f with
       toC_exp f1
       toC_exp f2
   | MakeLabel (_, _, l, f) -> (* TODO *)
-    fprintf ppf "%s.f = (fun*)GC_MALLOC(sizeof(fun));\n%s.f->funkind = LABEL;\n%s.f->fundat.label = fun_%s;\n%a"
+    fprintf ppf "value %s;\n%s.f = (fun*)GC_MALLOC(sizeof(fun));\n%s.f->funkind = LABEL;\n%s.f->fundat.label = fun_%s;\n%a"
+      l
       l
       l
       l
       l
       toC_exp f
   | MakePolyLabel (_, _, l, { ftvs = ftv; offset = n }, f) -> (*TODO*)
-    fprintf ppf "%s.f = (fun*)GC_MALLOC(sizeof(fun));\n%s.f->funkind = POLY_LABEL;\n%s.f->fundat.poly_label = fun_%s;\n%s.f->tas = (ty**)GC_MALLOC(sizeof(ty*) * %d);\n%a%a"
+    fprintf ppf "value %s;\n%s.f = (fun*)GC_MALLOC(sizeof(fun));\n%s.f->funkind = POLY_LABEL;\n%s.f->fundat.poly_label = fun_%s;\n%s.f->tas = (ty**)GC_MALLOC(sizeof(ty*) * %d);\n%a%a"
+      l
       l
       l
       l
@@ -309,7 +311,8 @@ let rec toC_exp ppf f = match f with
       toC_ftas (n, l, ftv)
       toC_exp f
   | MakeCls (x, _, { entry = _; actual_fv = vs }, f) -> (*TODO*)
-    fprintf ppf "%s.f = (fun*)GC_MALLOC(sizeof(fun));\n%s.f->funkind = CLOSURE;\n%s.f->fundat.closure.cls = fun_%s;\n%s.f->fundat.closure.fvs = (value*)GC_MALLOC(sizeof(value) * %d);\n%a\n%a"
+    fprintf ppf "value %s;\n%s.f = (fun*)GC_MALLOC(sizeof(fun));\n%s.f->funkind = CLOSURE;\n%s.f->fundat.closure.cls = fun_%s;\n%s.f->fundat.closure.fvs = (value*)GC_MALLOC(sizeof(value) * %d);\n%a\n%a"
+      x
       x
       x
       x
@@ -319,7 +322,8 @@ let rec toC_exp ppf f = match f with
       toC_vs (x, vs)
       toC_exp f
   | MakePolyCls (x, _, { entry = _; actual_fv = vs }, { ftvs = ftv; offset = n }, f) -> (*TODO*)
-    fprintf ppf "%s.f = (fun*)GC_MALLOC(sizeof(fun));\n%s.f->funkind = POLY_CLOSURE;\n%s.f->fundat.poly_closure.pcls = fun_%s;\n%s.f->fundat.poly_closure.fvs = (value*)GC_MALLOC(sizeof(value) * %d);\n%a\n%s.f->tas = (ty**)GC_MALLOC(sizeof(ty*) * %d);\n%a%a"
+    fprintf ppf "value %s;\n%s.f = (fun*)GC_MALLOC(sizeof(fun));\n%s.f->funkind = POLY_CLOSURE;\n%s.f->fundat.poly_closure.pcls = fun_%s;\n%s.f->fundat.poly_closure.fvs = (value*)GC_MALLOC(sizeof(value) * %d);\n%a\n%s.f->tas = (ty**)GC_MALLOC(sizeof(ty*) * %d);\n%a%a"
+      x
       x
       x
       x
@@ -539,58 +543,92 @@ let toC_tvs ppf (tvl, n) =
   
 (*関数名の前方定義
   再帰関数などに対応するために，関数本体の前に，名前を前方定義する
-  ここで定義する内容はfun型の関数自体の定義と，関数が格納されたvalue型の値の二つ
+  ここで定義する内容はfun型の関数自体の定義 (*いらない：と，関数が格納されたvalue型の値の二つ*)
   fundef内のfvl(自由変数のリスト)とtvs(型変数のリスト)に要素が入っているかどうかで関数の型が異なるので，四通りの場合分けが発生する*)
 let toC_label ppf { name = (l, _); tvs = (tvs, _); arg = (_, _); formal_fv = fvl; body = _ } = 
   let num = List.length fvl in
   let num' = List.length tvs in
   if num = 0 && num' = 0 then
-    fprintf ppf "value fun_%s(value);\nvalue %s;"
-      l
+    fprintf ppf "value fun_%s(value);"
       l
   else if num = 0 then
-    fprintf ppf "value fun_%s(value, ty**);\nvalue %s;"
-      l
+    fprintf ppf "value fun_%s(value, ty**);"
       l
   else if num'= 0 then
-    fprintf ppf "value fun_%s(value, value*);\nvalue %s;"
-      l
+    fprintf ppf "value fun_%s(value, value*);"
       l
   else
-    fprintf ppf "value fun_%s(value, value*, ty**);\nvalue %s;"
-      l
+    fprintf ppf "value fun_%s(value, value*, ty**);"
       l
 
 (*関数本体の定義
   やはり4通りの場合分けが発生*)
+let toC_funv ppf (l, num, num') =
+  if num = 0 && num' = 0 then (*自由変数も型変数もない関数は，引数を一つとる関数として定義*)
+    fprintf ppf "value %s;\n%s.f = (fun*)GC_MALLOC(sizeof(fun));\n%s.f->funkind = LABEL;\n%s.f->fundat.label = fun_%s;\n"
+      l
+      l
+      l
+      l
+      l
+  else if num = 0 then (*自由変数がない関数は，引数を一つと，型変数リストを受け取る関数として定義*)
+    fprintf ppf "value %s;\n%s.f = (fun*)GC_MALLOC(sizeof(fun));\n%s.f->funkind = POLY_LABEL;\n%s.f->fundat.poly_label = fun_%s;\n%s.f->tas = tvs;\n"
+      l
+      l
+      l
+      l
+      l
+      l
+  else if num' = 0 then (*型変数がない関数は，引数を一つと，自由変数リストを受け取る関数として定義*)
+    fprintf ppf "value %s;\n%s.f = (fun*)GC_MALLOC(sizeof(fun));\n%s.f->funkind = CLOSURE;\n%s.f->fundat.closure.cls = fun_%s;\n%s.f->fundat.closure.fvs = zs;\n"
+      l
+      l
+      l
+      l
+      l
+      l
+  else (*上記以外の場合は，引数を一つ，自由変数リスト，型変数リストを受け取る関数として定義*)
+    fprintf ppf "value %s;\n%s.f = (fun*)GC_MALLOC(sizeof(fun));\n%s.f->funkind = POLY_CLOSURE;\n%s.f->fundat.poly_closure.pcls = fun_%s;\n%s.f->fundat.poly_closure.fvs = zs;\n%s.f->tas = tvs;\n"
+      l
+      l
+      l
+      l
+      l
+      l
+      l
+
 let toC_fundef ppf { name = (l, _); tvs = (tvs, n); arg = (x, _); formal_fv = fvl; body = f } = 
   let num = List.length fvl in
   let num' = List.length tvs in
   if num = 0 && num' = 0 then (*自由変数も型変数もない関数は，引数を一つとる関数として定義*)
-    fprintf ppf "value fun_%s(value %s) {\n%a}"
+    fprintf ppf "value fun_%s(value %s) {\n%a%a}"
       l
       x
+      toC_funv (l, num, num')
       toC_exp f
   else if num = 0 then (*自由変数がない関数は，引数を一つと，型変数リストを受け取る関数として定義*)
-    fprintf ppf "value fun_%s(value %s, ty* tvs[%d]) {\n%a%a}"
+    fprintf ppf "value fun_%s(value %s, ty* tvs[%d]) {\n%a%a%a}"
       l
       x
       num'
+      toC_funv (l, num, num')
       toC_tvs (tvs, n)
       toC_exp f
   else if num' = 0 then (*型変数がない関数は，引数を一つと，自由変数リストを受け取る関数として定義*)
-    fprintf ppf "value fun_%s(value %s, value zs[%d]) {\n%a%a}"
+    fprintf ppf "value fun_%s(value %s, value zs[%d]) {\n%a%a%a}"
       l
       x
       num
+      toC_funv (l, num, num')
       toC_fvs fvl
       toC_exp f
   else (*上記以外の場合は，引数を一つ，自由変数リスト，型変数リストを受け取る関数として定義*)
-    fprintf ppf "value fun_%s(value %s, value zs[%d], ty* tvs[%d]) {\n%a%a%a}"
+    fprintf ppf "value fun_%s(value %s, value zs[%d], ty* tvs[%d]) {\n%a%a%a%a}"
       l
       x
       num
       num'
+      toC_funv (l, num, num')
       toC_tvs (tvs, n)
       toC_fvs fvl
       toC_exp f

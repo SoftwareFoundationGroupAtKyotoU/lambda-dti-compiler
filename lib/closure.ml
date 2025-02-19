@@ -75,7 +75,7 @@ module KNorm = struct
       let f1' = toCls_exp (Environment.add y u' tyenv') known' new_tvs f1 in
       let zs = Cls.V.diff (Cls.fv f1') (Cls.V.singleton y) in
       let known', f1' =
-        if Cls.V.is_empty zs && List.length tvs = 0 then known', f1'
+        if Cls.V.is_empty zs && List.length new_tvs = 0 then known', f1'
         else (toplevel := toplevel_backup; tvset := tvset_backup;
         let f1' = toCls_exp (Environment.add y u' tyenv') known new_tvs f1 in
         known, f1')

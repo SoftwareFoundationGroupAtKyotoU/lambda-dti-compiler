@@ -5,6 +5,10 @@ ldti cast-abort.ml
 ldti cls-bug.ml
 ldti cls-rec.ml
 ldti even-odd.ml
+ldti example1_fail.ml
+ldti example1_success.ml
+ldti example2.ml
+ldti example3.ml
 ldti fib.ml
 ldti funcomp.ml
 ldti gcd.ml
@@ -15,6 +19,9 @@ ldti join-stack2.ml
 ldti join-stack3.ml
 ldti non-tail-if.ml
 ldti print.ml
+ldti repeat_f_dyn.ml
+ldti repeat_x_dyn.ml
+ldti repeat.ml
 ldti shuffle.ml
 ldti sum-tail.ml
 ldti sum.ml
