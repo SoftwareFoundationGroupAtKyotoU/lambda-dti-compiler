@@ -240,11 +240,15 @@ module ITGL = struct
   let closure_tyvars1 u1 env v1 =
     TV.elements @@ TV.diff (ftv_ty u1) @@ TV.union (ftv_tyenv env) (ftv_exp v1)
 
-  let closure_tyvars_let_decl e u1 env =
+  let closure_tyvars_let_decl1 e u1 env =
     TV.elements @@ TV.diff (TV.union (tv_exp e) (ftv_ty u1)) (ftv_tyenv env)
 
   let closure_tyvars2 w1 env u1 v1 =
     let ftvs = TV.big_union [ftv_tyenv env; ftv_ty u1; ftv_exp v1] in
+    TV.elements @@ TV.diff (Syntax.CC.ftv_exp w1) ftvs
+
+  let closure_tyvars_let_decl2 w1 env u1 v1 =
+    let ftvs = TV.big_union [ftv_tyenv env; ftv_ty u1; tv_exp v1] in
     TV.elements @@ TV.diff (Syntax.CC.ftv_exp w1) ftvs
 
   let rec is_base_value env u =
@@ -509,8 +513,8 @@ module ITGL = struct
       env, CC.Exp f, u
     | LetDecl (x, e) when is_value env e ->
       let f, u = translate_exp env e in
-      let xs = closure_tyvars_let_decl e u env in
-      let ys = closure_tyvars2 f env u e in
+      let xs = closure_tyvars_let_decl1 e u env in
+      let ys = closure_tyvars_let_decl2 f env u e in
       let env = Environment.add x (TyScheme (xs @ ys, u)) env in
       env, CC.LetDecl (x, xs @ ys, f), u
     | LetDecl (x, e) ->
